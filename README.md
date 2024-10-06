@@ -1,0 +1,2 @@
+# net77
+A tiny networking library written in C for educational purposes. Has HTTP parsing/construction features, can send requests HTTP/1.0 style and has a helpers for hosting HTTP servers. Should in the future support https and http 2.0
