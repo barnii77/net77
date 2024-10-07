@@ -1,8 +1,7 @@
-#include <arpa/inet.h>
 #include <unistd.h>
-#include <netdb.h>
 #include <string.h>
 #include <stdio.h>
+#include "n77netincludes.h"
 #include "n77sock.h"
 #include "n77stringutils.h"
 

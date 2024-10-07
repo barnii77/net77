@@ -1,8 +1,7 @@
 #include <stdio.h>
 #include <memory.h>
-#include <netdb.h>
-#include <sys/socket.h>
 #include <unistd.h>
+#include "n77netincludes.h"
 #include "n77server.h"
 #include "n77serde.h"
 

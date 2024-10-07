@@ -19,8 +19,13 @@ add_library(net77 STATIC
         include/n77request.h
         include/n77stringutils.h
         include/n77requtils.h
+        include/n77netincludes.h
 )
 
 add_executable(tests test/test.c)
+
+if (WIN32)
+    target_link_libraries(net77 PUBLIC Ws2_32)
+endif ()
 
 target_link_libraries(tests PRIVATE net77)

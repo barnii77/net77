@@ -92,11 +92,32 @@ MAKE_SERDE_TEST(REQ_TEST1, Request, SerdeReq1);
 MAKE_SERDE_TEST(RESP_TEST1, Response, SerdeResp1);
 
 // FIXME doesn't like "http://" prefix
-MAKE_RAW_REQUEST_TEST(GET_REQ_TEST1, "www.example.com", 80, GET_REQ_TARGET1, GetReq1);
+// MAKE_RAW_REQUEST_TEST(GET_REQ_TEST1, "www.example.com", 80, GET_REQ_TARGET1, GetReq1);
+
+int testGetReq1(void) {
+    StringRef dref = {strlen(GET_REQ_TEST1), GET_REQ_TEST1};
+    String out;
+    int err = rawRequest("www.example.com", 80, dref, &out);
+    if (!err) {
+        replaceHeader(out.data, "Age: ");
+        replaceHeader(out.data, "Date: ");
+        replaceHeader(out.data, "Expires: ");
+        replaceHeader(out.data, "Last-Modified: ");
+        replaceHeader(out.data, "Server: ");
+        if (strcmp(out.data, GET_REQ_TARGET1) != 0) {
+            freeString(&out);
+            return -1;
+        }
+        freeString(&out);
+    }
+    return err;
+}
+
+// FIXME DNS (getaddrinfo) in sock.c:23 fails on windows if I use mingw and the windows socket api headers instead of the posix ones
 
 int (*const tests[])(void) = {testParseReq1, testParseResp1, testSerdeReq1, testSerdeResp1, testGetReq1};
 
-int run_all_tests = 1;
+int run_all_tests = 0;
 const char *selected_test = "testGetReq1";
 const char *names[] = {"testParseReq1", "testParseResp1", "testSerdeReq1", "testSerdeResp1", "testGetReq1"};
 
