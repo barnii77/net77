@@ -18,8 +18,11 @@ add_library(net77 STATIC
         lib/sock.c
         include/n77request.h
         include/n77stringutils.h
-        include/n77requtils.h
+        include/n77utils.h
         include/n77netincludes.h
+        lib/init.c
+        include/n77init.h
+        lib/utils.c
 )
 
 add_executable(tests test/test.c)

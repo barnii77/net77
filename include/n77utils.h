@@ -1,5 +1,5 @@
-#ifndef NET77_N77REQUTILS_H
-#define NET77_N77REQUTILS_H
+#ifndef NET77_N77UTILS_H
+#define NET77_N77UTILS_H
 
 #include "n77request.h"
 
@@ -32,5 +32,11 @@ void responseBuilderAddHeader(ResponseBuilder *rb, StringRef name, StringRef val
 Response responseBuilderBuild(ResponseBuilder *rb);
 
 Response responseBuilderBuildAndDestroy(ResponseBuilder *rb);
+
+StringRef removeURLPrefix(StringRef url);
+
+int isLetter(char c);
+
+StringRef charPtrToStringRef(const char *data);
 
 #endif

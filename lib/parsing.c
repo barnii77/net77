@@ -40,7 +40,7 @@ int expectChar(StringRef *str, char c) {
 }
 
 char toLower(char c) {
-    char off = (char)(('A' <= c && c <= 'Z') * ('a' - 'A'));
+    char off = (char) (('A' <= c && c <= 'Z') * ('a' - 'A'));
     return c + off;
 }
 
@@ -165,9 +165,14 @@ int parseHeaderField(StringRef *str, HeaderField *h) {
 }
 
 int parseHeaderStruct(StringRef *str, HeaderStruct *hs) {
-    int err, count = 0, last_was_nl = 0;
+    int err, count = 0, last_was_nl = 0, is_beginning = 1;
     for (int i = 0; i < str->len - 1; i++) {
         if (str->data[i] == '\r' && str->data[i + 1] == '\n') {
+            if (is_beginning) {
+                hs->count = 0;
+                hs->fields = NULL;
+                return 0;
+            }
             if (last_was_nl)
                 break;
             last_was_nl = 1;
@@ -175,9 +180,10 @@ int parseHeaderStruct(StringRef *str, HeaderStruct *hs) {
         } else {
             last_was_nl = 0;
         }
+        is_beginning = 0;
     }
 
-    int hfsize = count * (int)sizeof(HeaderField);
+    int hfsize = count * (int) sizeof(HeaderField);
     HeaderField *hf = malloc(hfsize);
     if (!hf)
         return 1;
@@ -195,8 +201,6 @@ int parseHeaderStruct(StringRef *str, HeaderStruct *hs) {
         free(hf);
         return 1;
     }
-    str->len -= 2;
-    str->data += 2;
     hs->count = count;
     hs->fields = hf;
     return 0;
@@ -204,9 +208,14 @@ int parseHeaderStruct(StringRef *str, HeaderStruct *hs) {
 
 int parseHeaderString(StringRef *str, StringRef *h) {
     const char *start = str->data;
-    int last_was_nl = 0;
+    int last_was_nl = 0, is_beginning = 0;
     for (;; str->data++, str->len--) {
-        if (str->len > 1 && (str->data[0] != '\r' || str->data[1] != '\n')) {
+        if (str->len > 1 && str->data[0] == '\r' || str->data[1] == '\n') {
+            if (is_beginning) {
+                h->data = start;
+                h->len = 0;
+                return 0;
+            }
             if (last_was_nl)
                 break;
             str->data++;
@@ -215,13 +224,17 @@ int parseHeaderString(StringRef *str, StringRef *h) {
         } else {
             last_was_nl = 0;
         }
+        is_beginning = 1;
     }
-    while (--str->len > 0 && (++str->data)[-1] != '\n');
+    while (str->len > 0 && (++str->data)[-1] != '\n')
+        str->len--;
     if (str->len == 0)
         return 1;  // missing final empty line to terminate http header and mark start of optional body
 
-    StringRef out = {str->data - start, start};
-    *h = out;
+    str->len++;
+    str->data += 2;
+    h->len = str->data - start;
+    h->data = start;
     return 0;
 }
 
@@ -263,6 +276,7 @@ int parseRequest(StringRef str, Request *req, int parse_header_into_structs) {
 
     Header head;
     BUBBLE_UP_ERR(parseHeader(&str, &head, parse_header_into_structs));
+    BUBBLE_UP_ERR(expectNewline(&str));
 
     StringRef body;
     BUBBLE_UP_ERR(parseBody(&str, &body));
@@ -297,6 +311,7 @@ int parseResponse(StringRef str, Response *resp, int parse_header_into_structs) 
 
     Header head;
     BUBBLE_UP_ERR(parseHeader(&str, &head, parse_header_into_structs));
+    BUBBLE_UP_ERR(expectNewline(&str));
 
     StringRef body;
     BUBBLE_UP_ERR(parseBody(&str, &body));

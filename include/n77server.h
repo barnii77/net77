@@ -17,7 +17,7 @@
  * If -1 is passed, use default of 1kB
  * @return err (0 means success)
  */
-int runServer(int (*handler)(void *, int, char *, size_t), void *handler_data, const char *host,
+int runServer(int (*handler)(void *, size_t, char *, size_t), void *handler_data, const char *host,
               int port, int max_concurrent_connections, int server_buf_size);
 
 #endif

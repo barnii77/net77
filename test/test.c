@@ -2,42 +2,34 @@
 #include <stdio.h>
 #include "n77serde.h"
 #include "n77request.h"
+#include "n77init.h"
+#include "n77utils.h"
 
 const char *REQ_TEST1 = "GET /file/hello.jpg HTTP/1.1\r\nHost:www.example.com\r\n\r\n{\"json\": \"body\"}";
+const char *REQ_TEST_EMPTY_BODY_AND_HEADER1 = "GET / HTTP/1.1\r\n\r\nxyz";
 const char *RESP_TEST1 = "HTTP/1.0 200 OK\r\nHost:www.example.com\r\n\r\n{\"json\": \"body\"}";
 const char *GET_REQ_TEST1 = "GET / HTTP/1.0\r\nHost:www.example.com\r\n\r\n";
-const char *GET_REQ_TARGET1 = "HTTP/1.0 200 OK\r\nAccept-Ranges: bytes\r\nAge: \r\nCache-Control: max-age=604800\r\nContent-Type: text/html; charset=UTF-8\r\nDate: \r\nEtag: \"3147526947+gzip\"\r\nExpires: \r\nLast-Modified: \r\nServer: \r\nVary: Accept-Encoding\r\nX-Cache: HIT\r\nContent-Length: 1256\r\nConnection: close\r\n\r\n<!doctype html>\n<html>\n<head>\n    <title>Example Domain</title>\n\n    <meta charset=\"utf-8\" />\n    <meta http-equiv=\"Content-type\" content=\"text/html; charset=utf-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n    <style type=\"text/css\">\n    body {\n        background-color: #f0f0f2;\n        margin: 0;\n        padding: 0;\n        font-family: -apple-system, system-ui, BlinkMacSystemFont, \"Segoe UI\", \"Open Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif;\n        \n    }\n    div {\n        width: 600px;\n        margin: 5em auto;\n        padding: 2em;\n        background-color: #fdfdff;\n        border-radius: 0.5em;\n        box-shadow: 2px 3px 7px 2px rgba(0,0,0,0.02);\n    }\n    a:link, a:visited {\n        color: #38488f;\n        text-decoration: none;\n    }\n    @media (max-width: 700px) {\n        div {\n            margin: 0 auto;\n            width: auto;\n        }\n    }\n    </style>    \n</head>\n\n<body>\n<div>\n    <h1>Example Domain</h1>\n    <p>This domain is for use in illustrative examples in documents. You may use this\n    domain in literature without prior coordination or asking for permission.</p>\n    <p><a href=\"https://www.iana.org/domains/example\">More information...</a></p>\n</div>\n</body>\n</html>\n";
+const char *GET_REQ_TARGET1 = "HTTP/1.0 200 OK\r\nCache-Control: max-age=604800\r\nContent-Type: text/html; charset=UTF-8\r\nVary: Accept-Encoding\r\nX-Cache: HIT\r\nContent-Length: 1256\r\nConnection: close\r\n\r\n<!doctype html>\n<html>\n<head>\n    <title>Example Domain</title>\n\n    <meta charset=\"utf-8\" />\n    <meta http-equiv=\"Content-type\" content=\"text/html; charset=utf-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n    <style type=\"text/css\">\n    body {\n        background-color: #f0f0f2;\n        margin: 0;\n        padding: 0;\n        font-family: -apple-system, system-ui, BlinkMacSystemFont, \"Segoe UI\", \"Open Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif;\n        \n    }\n    div {\n        width: 600px;\n        margin: 5em auto;\n        padding: 2em;\n        background-color: #fdfdff;\n        border-radius: 0.5em;\n        box-shadow: 2px 3px 7px 2px rgba(0,0,0,0.02);\n    }\n    a:link, a:visited {\n        color: #38488f;\n        text-decoration: none;\n    }\n    @media (max-width: 700px) {\n        div {\n            margin: 0 auto;\n            width: auto;\n        }\n    }\n    </style>    \n</head>\n\n<body>\n<div>\n    <h1>Example Domain</h1>\n    <p>This domain is for use in illustrative examples in documents. You may use this\n    domain in literature without prior coordination or asking for permission.</p>\n    <p><a href=\"https://www.iana.org/domains/example\">More information...</a></p>\n</div>\n</body>\n</html>\n";
 
-void replaceHeader(char *http_response, const char *date_header) {
-    char *date_pos = strstr(http_response, date_header);
+void removeHeaderField(char *http_response, const char *field_name) {
+    char *date_pos = strstr(http_response, field_name);
 
     if (date_pos) {
-        // Move pointer to the value part (after "Date: ")
-        date_pos += strlen(date_header);
-
-        // Find the end of the Date header line (look for '\r' or '\n')
-        char *end_of_line = strchr(date_pos, '\r');
-        if (!end_of_line) {
-            end_of_line = strchr(date_pos, '\n');
-        }
-
-        // Replace the Date value with "xyz" (ensure it fits)
+        // find "\r" and move 2 chars to the right to also remove "\r\n"
+        char *end_of_line = strchr(date_pos, '\r') + 2;
         if (end_of_line) {
             size_t remaining_length = strlen(end_of_line);
-            size_t new_value_length = strlen("");
-            strncpy(date_pos, "", new_value_length);
-            // Move the rest of the string (after the new value) to the correct position
-            memmove(date_pos + new_value_length, end_of_line, remaining_length + 1);
+            memmove(date_pos, end_of_line, remaining_length + 1);
         }
     }
 }
 
-#define MAKE_PARSE_TEST(test_data, test_type, test_name) \
+#define MAKE_PARSE_TEST(test_data, test_type, test_name, parse_header_as_structs) \
 int test##test_name(void) { \
     size_t len = strlen(test_data); \
     StringRef s = {len, test_data}; \
     test_type out; \
-    int err = parse##test_type(s, &out, 1); \
+    int err = parse##test_type(s, &out, parse_header_as_structs); \
     return err; \
 }
 
@@ -67,13 +59,15 @@ int test##test_name(void) { \
 int test##test_name(void) { \
     StringRef dref = {strlen(test_data), test_data}; \
     String out; \
-    int err = rawRequest(test_url, test_port, dref, &out); \
+    int err = rawRequest(removeURLPrefix(charPtrToStringRef(test_url)).data, test_port, dref, &out); \
     if (!err) { \
-        replaceHeader(out.data, "Age: "); \
-        replaceHeader(out.data, "Date: "); \
-        replaceHeader(out.data, "Expires: "); \
-        replaceHeader(out.data, "Last-Modified: "); \
-        replaceHeader(out.data, "Server: "); \
+        removeHeaderField(out.data, "Age"); \
+        removeHeaderField(out.data, "Date"); \
+        removeHeaderField(out.data, "Expires"); \
+        removeHeaderField(out.data, "Last-Modified"); \
+        removeHeaderField(out.data, "Server"); \
+        removeHeaderField(out.data, "Etag"); \
+        removeHeaderField(out.data, "Accept-Ranges"); \
         if (strcmp(out.data, test_exp_outcome) != 0) { \
             freeString(&out); \
             return -1; \
@@ -83,56 +77,62 @@ int test##test_name(void) { \
     return err; \
 }
 
-MAKE_PARSE_TEST(REQ_TEST1, Request, ParseReq1);
+MAKE_PARSE_TEST(REQ_TEST1, Request, ParseReq1, 1);
 
-MAKE_PARSE_TEST(RESP_TEST1, Response, ParseResp1);
+MAKE_PARSE_TEST(REQ_TEST_EMPTY_BODY_AND_HEADER1, Request, ParseReqMinimal1, 1);
+
+MAKE_PARSE_TEST(RESP_TEST1, Response, ParseResp1, 1);
+
+MAKE_PARSE_TEST(REQ_TEST1, Request, ParseReq1HeadToStr, 0);
+
+MAKE_PARSE_TEST(REQ_TEST_EMPTY_BODY_AND_HEADER1, Request, ParseReqMinimal1HeadToStr, 0);
+
+MAKE_PARSE_TEST(RESP_TEST1, Response, ParseResp1HeadToStr, 0);
 
 MAKE_SERDE_TEST(REQ_TEST1, Request, SerdeReq1);
 
 MAKE_SERDE_TEST(RESP_TEST1, Response, SerdeResp1);
 
-// FIXME doesn't like "http://" prefix
-// MAKE_RAW_REQUEST_TEST(GET_REQ_TEST1, "www.example.com", 80, GET_REQ_TARGET1, GetReq1);
+MAKE_RAW_REQUEST_TEST(GET_REQ_TEST1, "www.example.com", 80, GET_REQ_TARGET1, GetReq1);
 
-int testGetReq1(void) {
-    StringRef dref = {strlen(GET_REQ_TEST1), GET_REQ_TEST1};
-    String out;
-    int err = rawRequest("www.example.com", 80, dref, &out);
-    if (!err) {
-        replaceHeader(out.data, "Age: ");
-        replaceHeader(out.data, "Date: ");
-        replaceHeader(out.data, "Expires: ");
-        replaceHeader(out.data, "Last-Modified: ");
-        replaceHeader(out.data, "Server: ");
-        if (strcmp(out.data, GET_REQ_TARGET1) != 0) {
-            freeString(&out);
-            return -1;
-        }
-        freeString(&out);
-    }
-    return err;
-}
+MAKE_RAW_REQUEST_TEST(GET_REQ_TEST1, "http://www.example.com", 80, GET_REQ_TARGET1, GetReq1UrlPrefix1);
 
-// FIXME DNS (getaddrinfo) in sock.c:23 fails on windows if I use mingw and the windows socket api headers instead of the posix ones
+MAKE_RAW_REQUEST_TEST(GET_REQ_TEST1, "https://www.example.com", 80, GET_REQ_TARGET1, GetReq1UrlPrefix2);
 
-int (*const tests[])(void) = {testParseReq1, testParseResp1, testSerdeReq1, testSerdeResp1, testGetReq1};
+int (*const tests[])(void) = {testParseReq1, testParseReqMinimal1, testParseResp1, testParseReq1HeadToStr,
+                              testParseReqMinimal1HeadToStr, testParseResp1HeadToStr, testSerdeReq1, testSerdeResp1,
+                              testGetReq1, testGetReq1UrlPrefix1, testGetReq1UrlPrefix2};
 
-int run_all_tests = 0;
+int print_on_pass = 0;
+int print_pre_run_msg = 0;
+int run_all_tests = 1;
 const char *selected_test = "testGetReq1";
-const char *names[] = {"testParseReq1", "testParseResp1", "testSerdeReq1", "testSerdeResp1", "testGetReq1"};
+const char *names[] = {"testParseReq1", "testParseReqMinimal1", "testParseResp1", "testParseReq1HeadToStr",
+                       "testParseReqMinimal1HeadToStr", "testParseResp1HeadToStr", "testSerdeReq1", "testSerdeResp1",
+                       "testGetReq1", "testGetReq1UrlPrefix1", "testGetReq1UrlPrefix2"};
 
 int main(void) {
+    socketInit();
+    if (sizeof(names) / sizeof(char *) != sizeof(tests) / sizeof(int (*const)(void)))
+        printf("Warning: not every test has a name entry!\n");
+
+    int all_passed = 1;
     for (int i = 0; i < sizeof(tests) / sizeof(int (*const)(void)); i++) {
         const char *name = names[i];
         if (!run_all_tests && strcmp(name, selected_test) != 0)
             continue;
-        printf("Running test %s... ", name);
+        if (print_pre_run_msg)
+            printf("Running test %s...\n", name);
         int err = tests[i]();
         if (err) {
-            printf("Error: Code %d\n", err);
-        } else {
-            printf("Passed\n");
+            all_passed = 0;
+            printf("Test %s Error: Code %d\n", name, err);
+        } else if (print_on_pass) {
+            printf("Test %s Passed\n", name);
         }
     }
+    if (all_passed)
+        printf("All tests passed!\n");
+    socketCleanup();
     return 0;
 }

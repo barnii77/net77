@@ -1,29 +1,22 @@
 #ifndef N77NETINCLUDES_H
 #define N77NETINCLUDES_H
 
+#include "n77init.h"
+
 // Detect Windows system
 #if defined(_WIN32) || defined(_WIN64)
 // Include Windows-specific headers
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <windows.h>
+#include <WinSock2.h>
+#include <WS2tcpip.h>
+#include <Windows.h>
+#include <stdint.h>
+#include <basetsd.h>
+typedef SSIZE_T ssize_t;
 
 // Define types and constants that Windows doesn't have, but POSIX systems do
-typedef int socklen_t; // Windows uses int for socket length
-#define close closesocket // POSIX uses close(), Windows uses closesocket()
-
-// Ensure Winsock initialization in programs that use this header
-static int windows_socket_init()
-{
-    WSADATA wsaData;
-    return WSAStartup(MAKEWORD(2, 2), &wsaData);
-}
-
-// Ensure Winsock cleanup in programs that use this header
-static void windows_socket_cleanup()
-{
-    WSACleanup();
-}
+typedef int socklen_t;  // Windows uses int for socket length
+#define close closesocket  // POSIX uses close(), Windows uses closesocket()
+#define read recv  // POSIX uses read, Windows uses recv()
 
 #ifndef SO_REUSEPORT
 #define SO_REUSEPORT SO_REUSEADDR  // Fallback to SO_REUSEADDR if necessary
@@ -35,10 +28,10 @@ static void windows_socket_cleanup()
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <sys/socket.h>
-#include <unistd.h> // for close()
+#include <unistd.h>  // for close(), read(), write()
+#include <stdint.h>
 #ifndef SO_REUSEPORT
 #define SO_REUSEPORT 0  // No-op on systems that don't support it
 #endif
 #endif
-
 #endif
