@@ -23,6 +23,8 @@ add_library(net77 STATIC
         lib/init.c
         include/n77init.h
         lib/utils.c
+        include/n77threadincludes.h
+        lib/threading.c
 )
 
 add_executable(tests test/test.c)

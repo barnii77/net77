@@ -17,6 +17,7 @@ typedef SSIZE_T ssize_t;
 typedef int socklen_t;  // Windows uses int for socket length
 #define close closesocket  // POSIX uses close(), Windows uses closesocket()
 #define read recv  // POSIX uses read, Windows uses recv()
+#define send(socket, buf, len) send(socket, buf, len, 0)
 
 #ifndef SO_REUSEPORT
 #define SO_REUSEPORT SO_REUSEADDR  // Fallback to SO_REUSEADDR if necessary
@@ -28,10 +29,11 @@ typedef int socklen_t;  // Windows uses int for socket length
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <sys/socket.h>
-#include <unistd.h>  // for close(), read(), write()
+#include <unistd.h>  // for close(), read(), send()
 #include <stdint.h>
 #ifndef SO_REUSEPORT
 #define SO_REUSEPORT 0  // No-op on systems that don't support it
+#define send(socket, buf, len) send(socket, buf, len, MSG_NOSIGNAL)
 #endif
 #endif
 #endif

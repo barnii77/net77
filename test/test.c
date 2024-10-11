@@ -3,7 +3,9 @@
 #include "n77serde.h"
 #include "n77request.h"
 #include "n77init.h"
+#include "n77server.h"
 #include "n77utils.h"
+#include "n77netincludes.h"
 
 const char *REQ_TEST1 = "GET /file/hello.jpg HTTP/1.1\r\nHost:www.example.com\r\n\r\n{\"json\": \"body\"}";
 const char *REQ_TEST_EMPTY_BODY_AND_HEADER1 = "GET / HTTP/1.1\r\n\r\nxyz";
@@ -75,6 +77,20 @@ int test##test_name(void) { \
         freeString(&out); \
     } \
     return err; \
+}
+
+int testServerHandler(void *ctx, size_t socket_fd, char *data, size_t size) {
+    const char resp[] = "hi";
+    if (strcmp(data, "hello") == 0 && size == strlen(resp)) {
+        send(socket_fd, resp, sizeof(resp));
+        return 0;
+    }
+    return 1;
+}
+
+int testServer(void) {
+    runServer();
+    return 0;
 }
 
 MAKE_PARSE_TEST(REQ_TEST1, Request, ParseReq1, 1);

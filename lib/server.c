@@ -32,6 +32,7 @@ int runServer(int (*handler)(void *, size_t, char *, size_t), void *handler_data
     }
 
     // Try each address until we successfully bind
+    int found_addr = 0;
     for (p = res; p != NULL; p = p->ai_next) {
         // Create socket
         if ((server_fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == INVALID_SOCKET) {
@@ -47,11 +48,14 @@ int runServer(int (*handler)(void *, size_t, char *, size_t), void *handler_data
 
         // Bind to the address
         if (bind(server_fd, p->ai_addr, (socklen_t)p->ai_addrlen) == 0) {
+            found_addr = 1;
             break;  // Successfully bound
         }
 
         close(server_fd);
     }
+    if (!found_addr)
+        return 1;
 
     freeaddrinfo(res);
 
