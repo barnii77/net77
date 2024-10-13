@@ -1,5 +1,5 @@
-#ifndef NET77_N77STRINGUTILS_H
-#define NET77_N77STRINGUTILS_H
+#ifndef NET77_N77_STRING_UTILS_H
+#define NET77_N77_STRING_UTILS_H
 
 #include <stddef.h>
 
@@ -35,5 +35,7 @@ String stringBuilderBuild(StringBuilder *builder);
 
 // resets the string builder and uses the string builders memory (after realloc to reduce capacity to exact required size)
 String stringBuilderBuildAndDestroy(StringBuilder *builder);
+
+void stringBuilderDestroy(StringBuilder *builder);
 
 #endif

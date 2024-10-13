@@ -1,7 +1,7 @@
-#ifndef NET77_N77SOCK_H
-#define NET77_N77SOCK_H
+#ifndef NET77_N77_SOCK_H
+#define NET77_N77_SOCK_H
 
-#include "n77stringutils.h"
+#include "n77_string_utils.h"
 
 #define DEFAULT_CLIENT_BUF_SIZE (1024)
 
@@ -13,8 +13,10 @@
  * @param out where the received data will be written to if successful
  * @param client_buf_size how big the receive buffer should be initially before it starts growing to receive more data.
  * If -1 is passed, use default value of 1kB
+ * @param request_timeout_usec after how many microseconds a request times out and fails
  * @return err (0 means success)
  */
-int newSocketSendReceiveClose(const char *host, int port, StringRef data, String *out, int client_buf_size);
+int newSocketSendReceiveClose(const char *host, int port, StringRef data, String *out, int client_buf_size,
+                              int request_timeout_usec);
 
 #endif

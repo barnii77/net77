@@ -11,20 +11,26 @@ add_library(net77 STATIC
         lib/parsing.c
         lib/serialization.c
         lib/string_builder.c
-        include/n77serde.h
-        include/n77server.h
+        include/n77_serde.h
+        include/n77_server.h
         lib/server.c
-        include/n77sock.h
+        include/n77_sock.h
         lib/sock.c
-        include/n77request.h
-        include/n77stringutils.h
-        include/n77utils.h
-        include/n77netincludes.h
+        include/n77_request.h
+        include/n77_string_utils.h
+        include/n77_utils.h
+        include/n77_net_includes.h
         lib/init.c
-        include/n77init.h
+        include/n77_init.h
         lib/utils.c
-        include/n77threadincludes.h
+        include/n77_thread_includes.h
         lib/threading.c
+        include/n77_fixed_size_set.h
+        lib/fixed_size_set.c
+        include/n77_linked_list.h
+        lib/linked_list.c
+        include/n77_thread_pool.h
+        lib/thread_pool.c
 )
 
 add_executable(tests test/test.c)

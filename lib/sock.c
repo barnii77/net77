@@ -1,12 +1,14 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "n77netincludes.h"
-#include "n77sock.h"
-#include "n77stringutils.h"
+#include "n77_net_includes.h"
+#include "n77_sock.h"
+#include "n77_string_utils.h"
 
-#if defined(_WIN32) || defined(_WIN64)
-int newSocketSendReceiveClose(const char *host, int port, StringRef data, String *out, int client_buf_size) {
+#ifdef _MSC_VER
+
+int newSocketSendReceiveClose(const char *host, int port, StringRef data, String *out, int client_buf_size,
+                              int request_timeout_usec) {
     if (client_buf_size < 0)
         client_buf_size = DEFAULT_CLIENT_BUF_SIZE;
 
@@ -32,8 +34,19 @@ int newSocketSendReceiveClose(const char *host, int port, StringRef data, String
             continue;
         }
 
+        // set socket options
+        int opt = 1;
+        if (setsockopt(client_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, (const char *) &opt, sizeof(opt))) {
+            close(client_fd);
+            continue;
+        }
+        if (setSendRecvTimeout(client_fd, request_timeout_usec)) {
+            close(client_fd);
+            continue;
+        }
+
         // Connect to the server
-        if (connect(client_fd, p->ai_addr, (socklen_t)p->ai_addrlen) == 0) {
+        if (connect(client_fd, p->ai_addr, (socklen_t) p->ai_addrlen) == 0) {
             break;  // Successfully connected
         }
 
@@ -47,7 +60,7 @@ int newSocketSendReceiveClose(const char *host, int port, StringRef data, String
     }
 
     // Send data
-    if (send(client_fd, data.data, (int)data.len, 0) < 0) {
+    if (send(client_fd, data.data, (int) data.len) < 0) {
         close(client_fd);
         return 1;
     }
@@ -58,8 +71,7 @@ int newSocketSendReceiveClose(const char *host, int port, StringRef data, String
     ssize_t read_chars;
     char *buffer = malloc(client_buf_size);
     do {
-        // Use recv with flags set to 0 for default behavior
-        read_chars = recv(client_fd, buffer, client_buf_size, 0);
+        read_chars = recv(client_fd, buffer, client_buf_size);
         if (read_chars < 0) {
             close(client_fd);
             free(buffer);
@@ -75,8 +87,11 @@ int newSocketSendReceiveClose(const char *host, int port, StringRef data, String
     free(buffer);
     return 0;
 }
+
 #else
-int newSocketSendReceiveClose(const char *host, int port, StringRef data, String *out, int client_buf_size) {
+
+int newSocketSendReceiveClose(const char *host, int port, StringRef data, String *out, int client_buf_size,
+                              int request_timeout_usec) {
     if (client_buf_size < 0)
         client_buf_size = DEFAULT_CLIENT_BUF_SIZE;
 
@@ -102,6 +117,17 @@ int newSocketSendReceiveClose(const char *host, int port, StringRef data, String
             continue;
         }
 
+        // set socket options
+        int opt = 1;
+        if (setsockopt(client_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
+            close(client_fd);
+            continue;
+        }
+        if (setSendRecvTimeout(client_fd, request_timeout_usec)) {
+            close(client_fd);
+            continue;
+        }
+
         // Connect to the server
         if (connect(client_fd, p->ai_addr, p->ai_addrlen) == 0) {
             break;  // Successfully connected
@@ -117,7 +143,7 @@ int newSocketSendReceiveClose(const char *host, int port, StringRef data, String
     }
 
     // Send data
-    if (send(client_fd, data.data, data.len, 0) < 0) {
+    if (send(client_fd, data.data, data.len) < 0) {
         close(client_fd);
         return 1;
     }
@@ -128,7 +154,7 @@ int newSocketSendReceiveClose(const char *host, int port, StringRef data, String
     ssize_t read_chars;
     char *buffer = malloc(client_buf_size);
     do {
-        read_chars = read(client_fd, buffer, client_buf_size);
+        read_chars = recv(client_fd, buffer, client_buf_size);
         if (read_chars < 0) {
             close(client_fd);
             free(buffer);
@@ -144,4 +170,5 @@ int newSocketSendReceiveClose(const char *host, int port, StringRef data, String
     free(buffer);
     return 0;
 }
+
 #endif

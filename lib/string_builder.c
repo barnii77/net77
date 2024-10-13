@@ -1,7 +1,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
-#include "n77serde.h"
+#include "n77_serde.h"
 
 #ifdef _MSC_VER
 #include <intrin.h>
@@ -70,4 +70,12 @@ String stringBuilderBuildAndDestroy(StringBuilder *builder) {
     builder->cap = 0;
     builder->len = 0;
     return out;
+}
+
+void stringBuilderDestroy(StringBuilder *builder) {
+    if (builder->data)
+        free(builder->data);
+    builder->data = NULL;
+    builder->len = 0;
+    builder->cap = 0;
 }

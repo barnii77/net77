@@ -1,23 +1,23 @@
-#include "n77serde.h"
-#include "n77request.h"
-#include "n77sock.h"
-#include "n77utils.h"
+#include "n77_serde.h"
+#include "n77_request.h"
+#include "n77_sock.h"
+#include "n77_utils.h"
 
 #define BUBBLE_UP_ERR(err) if (err) return 1
 
-int request(const char *host, int port, Request *req, String *out) {
+int request(const char *host, int port, Request *req, String *out, int request_timeout_usec) {
     StringBuilder builder = newStringBuilder(0);
     BUBBLE_UP_ERR(serializeRequest(req, &builder));
     String str = stringBuilderBuildAndDestroy(&builder);
     StringRef str_ref = {str.len, str.data};
-    int err = newSocketSendReceiveClose(host, port, str_ref, out, -1);
+    int err = newSocketSendReceiveClose(host, port, str_ref, out, -1, request_timeout_usec);
     if (!err)
         freeString(&str);
     return err;
 }
 
-int rawRequest(const char *host, int port, StringRef req, String *out) {
-    return newSocketSendReceiveClose(host, port, req, out, -1);
+int rawRequest(const char *host, int port, StringRef req, String *out, int request_timeout_usec) {
+    return newSocketSendReceiveClose(host, port, req, out, -1, request_timeout_usec);
 }
 
 RequestBuilder newRequestBuilder(Method method, StringRef url, Version version) {

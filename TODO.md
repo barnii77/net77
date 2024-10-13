@@ -1,0 +1,1 @@
+- proper error codes (not just 0, 1, -1 but actual error enums)

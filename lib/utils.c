@@ -1,5 +1,6 @@
 #include <string.h>
-#include "n77utils.h"
+#include "n77_utils.h"
+#include "n77_net_includes.h"
 
 StringRef removeURLPrefix(StringRef url) {
     StringRef init = url;
@@ -22,3 +23,39 @@ StringRef charPtrToStringRef(const char *data) {
     StringRef out = {strlen(data), data};
     return out;
 }
+
+#ifdef _MSC_VER
+
+int setSendRecvTimeout(size_t fd, int timeout_usec) {
+    if (timeout_usec >= 0) {
+        struct timeval timeout;
+        timeout.tv_sec = timeout_usec / 1000000;
+        timeout.tv_usec = timeout_usec % 1000000;
+        if (setsockopt((SOCKET) fd, SOL_SOCKET, SO_RCVTIMEO, (const char *) &timeout, sizeof(timeout))) {
+            return 1;
+        }
+        if (setsockopt((SOCKET) fd, SOL_SOCKET, SO_SNDTIMEO, (const char *) &timeout, sizeof(timeout))) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+#else
+
+int setSendRecvTimeout(size_t fd, int timeout_usec) {
+    if (timeout_usec >= 0) {
+        struct timeval timeout;
+        timeout.tv_sec = timeout_usec / 1000000;
+        timeout.tv_usec = timeout_usec % 1000000;
+        if (setsockopt((int) fd, SOL_SOCKET, SO_RCVTIMEO, (const char *) &timeout, sizeof(timeout))) {
+            return 1;
+        }
+        if (setsockopt((int) fd, SOL_SOCKET, SO_SNDTIMEO, (const char *) &timeout, sizeof(timeout))) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+#endif

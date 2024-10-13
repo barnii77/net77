@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
-#include "n77serde.h"
+#include "n77_serde.h"
 
 #define STR_EQ_LITERAL(expr, literal) (!strncmp((expr), (literal), sizeof(literal) - 1))
 

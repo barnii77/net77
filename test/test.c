@@ -1,11 +1,14 @@
 #include <string.h>
+#include <stdlib.h>
 #include <stdio.h>
-#include "n77serde.h"
-#include "n77request.h"
-#include "n77init.h"
-#include "n77server.h"
-#include "n77utils.h"
-#include "n77netincludes.h"
+#include "n77_serde.h"
+#include "n77_request.h"
+#include "n77_init.h"
+#include "n77_server.h"
+#include "n77_utils.h"
+#include "n77_net_includes.h"
+#include "n77_thread_includes.h"
+#include "n77_sock.h"
 
 const char *REQ_TEST1 = "GET /file/hello.jpg HTTP/1.1\r\nHost:www.example.com\r\n\r\n{\"json\": \"body\"}";
 const char *REQ_TEST_EMPTY_BODY_AND_HEADER1 = "GET / HTTP/1.1\r\n\r\nxyz";
@@ -61,7 +64,7 @@ int test##test_name(void) { \
 int test##test_name(void) { \
     StringRef dref = {strlen(test_data), test_data}; \
     String out; \
-    int err = rawRequest(removeURLPrefix(charPtrToStringRef(test_url)).data, test_port, dref, &out); \
+    int err = rawRequest(removeURLPrefix(charPtrToStringRef(test_url)).data, test_port, dref, &out, 5000000); \
     if (!err) { \
         removeHeaderField(out.data, "Age"); \
         removeHeaderField(out.data, "Date"); \
@@ -79,18 +82,41 @@ int test##test_name(void) { \
     return err; \
 }
 
-int testServerHandler(void *ctx, size_t socket_fd, char *data, size_t size) {
-    const char resp[] = "hi";
-    if (strcmp(data, "hello") == 0 && size == strlen(resp)) {
-        send(socket_fd, resp, sizeof(resp));
-        return 0;
+void testServerHandler(void *server_handler_args) {
+    ServerHandlerArgs *args = server_handler_args;
+    const char resp[] = "hi\r\n";
+    if (strcmp(args->data, "hello\r\n") == 0) {
+        send(args->socket_fd, resp, sizeof(resp));
     }
-    return 1;
+    free(args->data);
+    if (args->heap_allocated)
+        free(args);
 }
 
+// TODO debug with echo "hello" | ncat 127.0.0.1 54321
+// TODO debug with net77testing.py in my wsl
+// TODO DEBUG DEBUG DEBUG DEBUG!!!!!!!!!!!!!!!!
 int testServer(void) {
-    runServer();
-    return 0;
+    const char *host = "127.0.0.1";
+    const int port = 54321;
+    ThreadPool thread_pool = newThreadPool(0, testServerHandler);
+    runServer(&thread_pool, NULL, host, port, 2, -1, 50000, 128);
+//    size_t thread = launchServerOnThread(testServerHandler, NULL, host, port, 2, -1, 5000000);
+//    threadJoin(thread);
+    return 1;
+//    if (thread == -1)
+//        return -1;
+//    const char msg[] = "hello";
+//    StringRef data = {sizeof(msg), msg};
+//    String out = {0, NULL};
+//    long long x = 0;
+//    while (x < 10000000000) x++;
+//    int err = newSocketSendReceiveClose(host, port, data, &out, -1, 5000000);
+//    if (err)
+//        return err;
+//    if (strcmp(out.data, "hi") == 0)
+//        return 0;
+//    return 69;
 }
 
 MAKE_PARSE_TEST(REQ_TEST1, Request, ParseReq1, 1);
@@ -117,15 +143,15 @@ MAKE_RAW_REQUEST_TEST(GET_REQ_TEST1, "https://www.example.com", 80, GET_REQ_TARG
 
 int (*const tests[])(void) = {testParseReq1, testParseReqMinimal1, testParseResp1, testParseReq1HeadToStr,
                               testParseReqMinimal1HeadToStr, testParseResp1HeadToStr, testSerdeReq1, testSerdeResp1,
-                              testGetReq1, testGetReq1UrlPrefix1, testGetReq1UrlPrefix2};
+                              testGetReq1, testGetReq1UrlPrefix1, testGetReq1UrlPrefix2, testServer};
 
 int print_on_pass = 0;
 int print_pre_run_msg = 0;
-int run_all_tests = 1;
-const char *selected_test = "testGetReq1";
+int run_all_tests = 0;
+const char *selected_test = "testServer";
 const char *names[] = {"testParseReq1", "testParseReqMinimal1", "testParseResp1", "testParseReq1HeadToStr",
                        "testParseReqMinimal1HeadToStr", "testParseResp1HeadToStr", "testSerdeReq1", "testSerdeResp1",
-                       "testGetReq1", "testGetReq1UrlPrefix1", "testGetReq1UrlPrefix2"};
+                       "testGetReq1", "testGetReq1UrlPrefix1", "testGetReq1UrlPrefix2", "testServer"};
 
 int main(void) {
     socketInit();
@@ -142,9 +168,9 @@ int main(void) {
         int err = tests[i]();
         if (err) {
             all_passed = 0;
-            printf("Test %s Error: Code %d\n", name, err);
+            printf("Test %s... Error: Code %d\n", name, err);
         } else if (print_on_pass) {
-            printf("Test %s Passed\n", name);
+            printf("Test %s... Passed\n", name);
         }
     }
     if (all_passed)

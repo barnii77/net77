@@ -1,6 +1,6 @@
-#include "n77netincludes.h"
+#include "n77_net_includes.h"
 
-#if defined(_WIN32) || defined(_WIN64)
+#ifdef _MSC_VER
 int socketInit() {
     WSADATA wsaData;
     return WSAStartup(MAKEWORD(2, 2), &wsaData);
