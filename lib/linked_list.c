@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <assert.h>
-#include "n77_linked_list.h"
-#include "n77_thread_includes.h"
+#include "net77/linked_list.h"
+#include "net77/thread_includes.h"
 
 DataOwningLinkedListNode *newLinkedListNode(void *data) {
     DataOwningLinkedListNode *node = malloc(sizeof(DataOwningLinkedListNode));

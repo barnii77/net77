@@ -1,5 +1,5 @@
-#ifndef NET77_N77_STRING_UTILS_H
-#define NET77_N77_STRING_UTILS_H
+#ifndef NET77_STRING_UTILS_H
+#define NET77_STRING_UTILS_H
 
 #include <stddef.h>
 

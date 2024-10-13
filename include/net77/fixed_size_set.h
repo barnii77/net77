@@ -1,5 +1,5 @@
-#ifndef NET77_N77_FIXED_SIZE_SET_H
-#define NET77_N77_FIXED_SIZE_SET_H
+#ifndef NET77_FIXED_SIZE_SET_H
+#define NET77_FIXED_SIZE_SET_H
 
 #include <stddef.h>
 

@@ -1,7 +1,7 @@
-#ifndef NET77_N77_LINKED_LIST_H
-#define NET77_N77_LINKED_LIST_H
+#ifndef NET77_LINKED_LIST_H
+#define NET77_LINKED_LIST_H
 
-#include "n77_thread_includes.h"
+#include "thread_includes.h"
 
 /**
  * A node in a linked list that *takes ownership of the data*

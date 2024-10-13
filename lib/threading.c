@@ -1,5 +1,5 @@
 #include <stdlib.h>
-#include "n77_thread_includes.h"
+#include "net77/thread_includes.h"
 
 typedef struct ThreadArgs {
     ThreadFunc func;

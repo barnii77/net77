@@ -2,7 +2,7 @@
 #define N77NETINCLUDES_H
 
 #include <stddef.h>
-#include "n77_init.h"
+#include "init.h"
 
 int setSendRecvTimeout(size_t fd, int timeout_usec);
 

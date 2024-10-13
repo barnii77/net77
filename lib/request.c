@@ -1,7 +1,7 @@
-#include "n77_serde.h"
-#include "n77_request.h"
-#include "n77_sock.h"
-#include "n77_utils.h"
+#include "net77/serde.h"
+#include "net77/request.h"
+#include "net77/sock.h"
+#include "net77/utils.h"
 
 #define BUBBLE_UP_ERR(err) if (err) return 1
 

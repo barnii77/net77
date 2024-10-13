@@ -1,8 +1,8 @@
-#ifndef NET77_N77_SERVER_H
-#define NET77_N77_SERVER_H
+#ifndef NET77_SERVER_H
+#define NET77_SERVER_H
 
 #include <stddef.h>
-#include "n77_thread_pool.h"
+#include "thread_pool.h"
 
 #define SERVER_BUF_SIZE (1024)
 

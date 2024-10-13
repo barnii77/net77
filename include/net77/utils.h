@@ -1,7 +1,7 @@
-#ifndef NET77_N77_UTILS_H
-#define NET77_N77_UTILS_H
+#ifndef NET77_UTILS_H
+#define NET77_UTILS_H
 
-#include "n77_request.h"
+#include "request.h"
 
 typedef struct RequestBuilder {
     Request req;

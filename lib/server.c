@@ -1,11 +1,11 @@
 #include <stdio.h>
 #include <memory.h>
 #include <stdlib.h>
-#include "n77_net_includes.h"
-#include "n77_server.h"
-#include "n77_serde.h"
-#include "n77_thread_includes.h"
-#include "n77_fixed_size_set.h"
+#include "net77/net_includes.h"
+#include "net77/server.h"
+#include "net77/serde.h"
+#include "net77/thread_includes.h"
+#include "net77/fixed_size_set.h"
 
 // TODO support HTTP/1.1's keep-alive connections: session support (so connections aren't immediately closed)
 

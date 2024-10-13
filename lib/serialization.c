@@ -1,5 +1,5 @@
 #include <assert.h>
-#include "n77_serde.h"
+#include "net77/serde.h"
 
 #define BUBBLE_UP_ERR(err) if (err) return 1
 

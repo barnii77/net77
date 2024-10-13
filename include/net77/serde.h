@@ -2,7 +2,7 @@
 #define NET77_NET77HTTP_H
 
 #include <stddef.h>
-#include "n77_string_utils.h"
+#include "string_utils.h"
 
 typedef enum Version {
     VERSION_HTTP10,

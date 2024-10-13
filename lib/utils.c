@@ -1,6 +1,6 @@
 #include <string.h>
-#include "n77_utils.h"
-#include "n77_net_includes.h"
+#include "net77/utils.h"
+#include "net77/net_includes.h"
 
 StringRef removeURLPrefix(StringRef url) {
     StringRef init = url;

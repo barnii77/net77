@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <memory.h>
-#include "n77_serde.h"
+#include "net77/serde.h"
 
 void freeRequest(Request *req) {
     if (req->head.type == HEADER_AS_STRUCT) {

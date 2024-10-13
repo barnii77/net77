@@ -11,25 +11,25 @@ add_library(net77 STATIC
         lib/parsing.c
         lib/serialization.c
         lib/string_builder.c
-        include/n77_serde.h
-        include/n77_server.h
+        include/net77/serde.h
+        include/net77/server.h
         lib/server.c
-        include/n77_sock.h
+        include/net77/sock.h
         lib/sock.c
-        include/n77_request.h
-        include/n77_string_utils.h
-        include/n77_utils.h
-        include/n77_net_includes.h
+        include/net77/request.h
+        include/net77/string_utils.h
+        include/net77/utils.h
+        include/net77/net_includes.h
         lib/init.c
-        include/n77_init.h
+        include/net77/init.h
         lib/utils.c
-        include/n77_thread_includes.h
+        include/net77/thread_includes.h
         lib/threading.c
-        include/n77_fixed_size_set.h
+        include/net77/fixed_size_set.h
         lib/fixed_size_set.c
-        include/n77_linked_list.h
+        include/net77/linked_list.h
         lib/linked_list.c
-        include/n77_thread_pool.h
+        include/net77/thread_pool.h
         lib/thread_pool.c
 )
 

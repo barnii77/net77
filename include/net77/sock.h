@@ -1,7 +1,7 @@
-#ifndef NET77_N77_SOCK_H
-#define NET77_N77_SOCK_H
+#ifndef NET77_SOCK_H
+#define NET77_SOCK_H
 
-#include "n77_string_utils.h"
+#include "string_utils.h"
 
 #define DEFAULT_CLIENT_BUF_SIZE (1024)
 

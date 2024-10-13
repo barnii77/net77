@@ -1,4 +1,4 @@
-#include "n77_net_includes.h"
+#include "net77/net_includes.h"
 
 #ifdef _MSC_VER
 int socketInit() {

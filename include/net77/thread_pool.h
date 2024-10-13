@@ -1,8 +1,8 @@
-#ifndef NET77_N77_THREAD_POOL_H
-#define NET77_N77_THREAD_POOL_H
+#ifndef NET77_THREAD_POOL_H
+#define NET77_THREAD_POOL_H
 
 #include <stddef.h>
-#include "n77_linked_list.h"
+#include "linked_list.h"
 
 /**
  * Handler function that any work dispatched to a thread is passed to. *Takes ownership of the data*

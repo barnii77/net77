@@ -1,14 +1,14 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "n77_serde.h"
-#include "n77_request.h"
-#include "n77_init.h"
-#include "n77_server.h"
-#include "n77_utils.h"
-#include "n77_net_includes.h"
-#include "n77_thread_includes.h"
-#include "n77_sock.h"
+#include "net77/serde.h"
+#include "net77/request.h"
+#include "net77/init.h"
+#include "net77/server.h"
+#include "net77/utils.h"
+#include "net77/net_includes.h"
+#include "net77/thread_includes.h"
+#include "net77/sock.h"
 
 const char *REQ_TEST1 = "GET /file/hello.jpg HTTP/1.1\r\nHost:www.example.com\r\n\r\n{\"json\": \"body\"}";
 const char *REQ_TEST_EMPTY_BODY_AND_HEADER1 = "GET / HTTP/1.1\r\n\r\nxyz";
@@ -100,7 +100,7 @@ int testServer(void) {
     const char *host = "127.0.0.1";
     const int port = 54321;
     ThreadPool thread_pool = newThreadPool(0, testServerHandler);
-    runServer(&thread_pool, NULL, host, port, 2, -1, 50000, 128);
+    runServer(&thread_pool, NULL, host, port, 2, -1, 50000, 128, 5000000);
 //    size_t thread = launchServerOnThread(testServerHandler, NULL, host, port, 2, -1, 5000000);
 //    threadJoin(thread);
     return 1;

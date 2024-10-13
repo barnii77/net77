@@ -1,7 +1,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
-#include "n77_serde.h"
+#include "net77/serde.h"
 
 #ifdef _MSC_VER
 #include <intrin.h>

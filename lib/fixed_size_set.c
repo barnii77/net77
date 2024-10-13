@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <memory.h>
-#include "n77_fixed_size_set.h"
+#include "net77/fixed_size_set.h"
 
 size_t findInSet(FixedSizeSet *set, const char *item) {
     for (size_t i = 0; i < set->len; i++)

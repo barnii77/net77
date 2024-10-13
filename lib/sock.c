@@ -1,9 +1,9 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "n77_net_includes.h"
-#include "n77_sock.h"
-#include "n77_string_utils.h"
+#include "net77/net_includes.h"
+#include "net77/sock.h"
+#include "net77/string_utils.h"
 
 #ifdef _MSC_VER
 
