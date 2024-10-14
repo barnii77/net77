@@ -5,7 +5,7 @@
 #include "net77/sock.h"
 #include "net77/string_utils.h"
 
-#ifdef _MSC_VER
+#if defined(_WIN32) || defined(_WIN64)
 
 int newSocketSendReceiveClose(const char *host, int port, StringRef data, String *out, int client_buf_size,
                               int request_timeout_usec) {
@@ -91,7 +91,7 @@ int newSocketSendReceiveClose(const char *host, int port, StringRef data, String
 #else
 
 int newSocketSendReceiveClose(const char *host, int port, StringRef data, String *out, int client_buf_size,
-                              int request_timeout_usec) {
+                              int request_timeout_usec, size_t max_response_size) {
     if (client_buf_size < 0)
         client_buf_size = DEFAULT_CLIENT_BUF_SIZE;
 
@@ -153,22 +153,25 @@ int newSocketSendReceiveClose(const char *host, int port, StringRef data, String
 
     ssize_t read_chars;
     char *buffer = malloc(client_buf_size);
-    do {
-        read_chars = recv(client_fd, buffer, client_buf_size);
-        if (read_chars < 0) {
-            close(client_fd);
-            free(buffer);
-            return 1;
-        }
+    int failed = 0;
+    for (;;) {
+        if ((read_chars = recv(client_fd, buffer, client_buf_size)) <= 0)
+            break;
         stringBuilderAppend(&builder, buffer, read_chars);
-    } while (read_chars != 0);
+        if (builder.len > max_response_size) {
+            // discard response (too big)
+            failed = 1;
+            break;
+        }
+    }
 
-    *out = stringBuilderBuildAndDestroy(&builder);
+    if (!failed)
+        *out = stringBuilderBuildAndDestroy(&builder);
 
     // Close the socket
     close(client_fd);
     free(buffer);
-    return 0;
+    return failed;
 }
 
 #endif

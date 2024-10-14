@@ -25,8 +25,8 @@ add_library(net77 STATIC
         lib/utils.c
         include/net77/thread_includes.h
         lib/threading.c
-        include/net77/fixed_size_set.h
-        lib/fixed_size_set.c
+        include/net77/mcfss.h
+        lib/mcfss.c
         include/net77/linked_list.h
         lib/linked_list.c
         include/net77/thread_pool.h

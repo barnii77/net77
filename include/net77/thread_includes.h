@@ -1,7 +1,7 @@
 #ifndef N77THREADINCLUDES_H
 #define N77THREADINCLUDES_H
 
-#ifdef _MSC_VER
+#if defined(_WIN32) || defined(_WIN64)
 
 #include <windows.h>
 

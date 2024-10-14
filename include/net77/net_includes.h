@@ -7,7 +7,7 @@
 int setSendRecvTimeout(size_t fd, int timeout_usec);
 
 // Detect Windows system
-#ifdef _MSC_VER
+#if defined(_WIN32) || defined(_WIN64)
 // Include Windows-specific headers
 #include <WinSock2.h>
 #include <WS2tcpip.h>

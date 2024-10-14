@@ -5,7 +5,7 @@
 #include "net77/server.h"
 #include "net77/serde.h"
 #include "net77/thread_includes.h"
-#include "net77/fixed_size_set.h"
+#include "net77/mcfss.h"
 
 // TODO support HTTP/1.1's keep-alive connections: session support (so connections aren't immediately closed)
 
@@ -53,7 +53,7 @@ size_t launchServerOnThread(ThreadPool *thread_pool, void *handler_data, const c
     return threadCreate(threadStartServer, args);
 }
 
-#ifdef _MSC_VER
+#if defined(_WIN32) || defined(_WIN64)
 
 // TODO implement max_request_size and all the fancy features in the linux version
 int runServer(ServerHandler handler, void *handler_data, const char *host,
@@ -165,16 +165,11 @@ int runServer(ServerHandler handler, void *handler_data, const char *host,
 #include <fcntl.h>
 #include <sys/time.h>
 
-static size_t timeInUSecs() {
+static size_t getTimeInUSecs() {
     struct timeval time;
     gettimeofday(&time, NULL);
     return (size_t) (time.tv_sec) * 1000000 + (size_t) (time.tv_usec);
 }
-
-typedef struct TimedPollFd {
-    size_t last_usage_time_usec;
-    struct pollfd *pfd;
-} TimedPollFd;
 
 int makeNonBlocking(int fd) {
     int flags, fco;
@@ -248,15 +243,15 @@ int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int
     char *buffer = malloc(server_buf_size);
     if (!buffer)
         return 1;
-    // FIXME this must be implemented differently
-    FixedSizeSet conn_pollfds = newFixedSizeSet(max_concurrent_connections, sizeof(struct pollfd));
-    if (!conn_pollfds.data)
+    size_t item_sizes[2] = {sizeof(struct pollfd), sizeof(size_t)};
+    MultiCategoryFixedSizeSet timed_conn_pollfds = newMcfsSet(max_concurrent_connections, item_sizes, 2);
+    if (!timed_conn_pollfds.data[0])
         return 1;
     ConnState conn_state = {.stop_server = 0, .discard_conn = 0};
 
     while (!conn_state.stop_server) {
         int new_socket;
-        if (conn_pollfds.len < conn_pollfds.cap &&
+        if (timed_conn_pollfds.len < timed_conn_pollfds.cap &&
             (new_socket = accept(server_fd, (struct sockaddr *) &client_addr, &addrlen)) >= 0) {
             if (setSendRecvTimeout(new_socket, request_timeout_usec)) {
                 close(new_socket);
@@ -264,15 +259,18 @@ int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int
                 struct pollfd pfd;
                 pfd.fd = new_socket;
                 pfd.events = POLLIN | POLLERR | POLLHUP | POLLNVAL;
-                if (fixedSizeSetAdd(&conn_pollfds, (const char *) &pfd))
+                pfd.revents = 0;
+                size_t time = getTimeInUSecs();
+                const char *items[] = {(const char *) &pfd, (const char *) &time};
+                if (mcfsSetAdd(&timed_conn_pollfds, items, 0))
                     close(new_socket);
             }
         }
 
-        int poll_ret = poll((struct pollfd *) conn_pollfds.data, conn_pollfds.len, 0);
+        int poll_ret = poll((struct pollfd *) timed_conn_pollfds.data[0], timed_conn_pollfds.len, 0);
         if (poll_ret > 0) {
-            struct pollfd *end = (struct pollfd *) conn_pollfds.data + conn_pollfds.len;
-            for (struct pollfd *pfd = (struct pollfd *) conn_pollfds.data; pfd < end; pfd++) {
+            struct pollfd *end = ((struct pollfd *) timed_conn_pollfds.data[0]) + timed_conn_pollfds.len;
+            for (struct pollfd *pfd = (struct pollfd *) timed_conn_pollfds.data[0]; pfd < end; pfd++) {
                 int conn_was_closed = 0;
                 int fd = pfd->fd;
 
@@ -293,9 +291,15 @@ int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int
 
                     // connection was closed
                     if (read_chars == 0 || failed) {
-                        if (!fixedSizeSetRemove(&conn_pollfds, (const char *) &pfd))
+                        pfd->revents = 0;
+                        if (!mcfsSetRemove(&timed_conn_pollfds, (const char *) pfd, 0))
                             close(fd);
                         conn_was_closed = 1;
+                    } else {
+                        // reset the last usage timer used for connection timeouts
+                        size_t *time_last_usage_ptr = (size_t *) mcfsSetGetAssocItemPtr(&timed_conn_pollfds,
+                                                                                        (const char *) pfd, 0, 1);
+                        *time_last_usage_ptr = getTimeInUSecs();
                     }
 
                     if (failed) {
@@ -322,7 +326,8 @@ int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int
                     }
 
                     if (conn_state.discard_conn && !conn_was_closed) {
-                        if (!fixedSizeSetRemove(&conn_pollfds, (const char *) &pfd))
+                        pfd->revents = 0;
+                        if (!mcfsSetRemove(&timed_conn_pollfds, (const char *) &pfd, 0))
                             close(fd);
                         conn_was_closed = 1;
                     }
@@ -332,7 +337,8 @@ int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int
                     continue;
 
                 if (pfd->revents & (POLLERR | POLLHUP)) {
-                    if (!fixedSizeSetRemove(&conn_pollfds, (const char *) &pfd))
+                    pfd->revents = 0;
+                    if (!mcfsSetRemove(&timed_conn_pollfds, (const char *) &pfd, 0))
                         close(fd);
                     conn_was_closed = 1;
                 }
@@ -340,11 +346,25 @@ int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int
                     continue;
 
                 if (pfd->revents & POLLNVAL) {
-                    fixedSizeSetRemove(&conn_pollfds, (const char *) &pfd);
+                    pfd->revents = 0;
+                    mcfsSetRemove(&timed_conn_pollfds, (const char *) &pfd, 0);
                     conn_was_closed = 1;
                 }
                 if (conn_was_closed)
                     continue;
+            }
+        }
+
+        size_t time_now = getTimeInUSecs();
+        for (int i = 0; i < timed_conn_pollfds.len; i++) {
+            size_t pfd_bytes_idx = i * sizeof(timed_conn_pollfds.item_sizes[0]);
+            struct pollfd *pfd = (struct pollfd *) &timed_conn_pollfds.data[0][pfd_bytes_idx];
+            size_t time_bytes_idx = i * sizeof(timed_conn_pollfds.item_sizes[1]);
+            size_t time_last_usage = *(size_t *) &timed_conn_pollfds.data[1][time_bytes_idx];
+            if (time_now - time_last_usage > connection_timeout_usec) {
+                mcfsSetRemove(&timed_conn_pollfds, (const char *) pfd, 0);
+                close(pfd->fd);
+                i--;
             }
         }
     }
@@ -352,11 +372,11 @@ int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int
     free(buffer);
 
     // close all open connections
-    struct pollfd *end = (struct pollfd *) conn_pollfds.data + conn_pollfds.len;
-    for (struct pollfd *pfd = (struct pollfd *) conn_pollfds.data; pfd < end; pfd++) {
+    struct pollfd *end = (struct pollfd *) timed_conn_pollfds.data[0] + timed_conn_pollfds.len;
+    for (struct pollfd *pfd = (struct pollfd *) timed_conn_pollfds.data[0]; pfd < end; pfd++) {
         close(pfd->fd);
     }
-    fixedSizeSetDestroy(&conn_pollfds);
+    mcfsSetDestroy(&timed_conn_pollfds);
 
     close(server_fd);
     return 0;

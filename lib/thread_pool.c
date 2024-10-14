@@ -5,7 +5,8 @@ void threadPoolWorker(void *arg) {
     ThreadPoolWorker *worker = arg;
     while (!worker->killed) {
         void *data = linkedListPopFront(worker->jobs_list);
-        worker->handler(data);
+        if (data)
+            worker->handler(data);
     }
     worker->kill_ack = 1;
 }
@@ -17,15 +18,18 @@ ThreadPool newThreadPool(size_t size, ThreadPoolHandlerFunc handler) {
         for (size_t i = 0; i < size; i++) {
             LinkedList *jobs = malloc(sizeof(LinkedList));
             *jobs = newLinkedList();
-            size_t thread = threadCreate(threadPoolWorker, jobs);
             ThreadPoolWorker worker = {
-                    .thread = thread,
+                    .thread = 0,
                     .jobs_list = jobs,
                     .handler = handler,
                     .killed = 0,
                     .kill_ack = 0,
             };
             workers[i] = worker;
+            mutexLock(&jobs->mutex);
+            size_t thread = threadCreate(threadPoolWorker, &workers[i]);
+            workers[i].thread = thread;
+            mutexUnlock(&jobs->mutex);
         }
     }
     ThreadPool out = {

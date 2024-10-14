@@ -14,9 +14,11 @@
  * @param client_buf_size how big the receive buffer should be initially before it starts growing to receive more data.
  * If -1 is passed, use default value of 1kB
  * @param request_timeout_usec after how many microseconds a request times out and fails
+ * @param max_response_size how big the response must at most be (in bytes) before it gets rejected and the function
+ * returns an error
  * @return err (0 means success)
  */
 int newSocketSendReceiveClose(const char *host, int port, StringRef data, String *out, int client_buf_size,
-                              int request_timeout_usec);
+                              int request_timeout_usec, size_t max_response_size);
 
 #endif

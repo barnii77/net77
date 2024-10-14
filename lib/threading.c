@@ -6,7 +6,7 @@ typedef struct ThreadArgs {
     void *arg;
 } ThreadArgs;
 
-#ifdef _MSC_VER
+#if defined(_WIN32) || defined(_WIN64)
 
 // TODO all the mutex stuff
 

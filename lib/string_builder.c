@@ -3,7 +3,7 @@
 #include <assert.h>
 #include "net77/serde.h"
 
-#ifdef _MSC_VER
+#if defined(_WIN32) || defined(_WIN64)
 #include <intrin.h>
 #define _builtin_clz __lzcnt64
 #else

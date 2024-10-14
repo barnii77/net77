@@ -64,7 +64,7 @@ int test##test_name(void) { \
 int test##test_name(void) { \
     StringRef dref = {strlen(test_data), test_data}; \
     String out; \
-    int err = rawRequest(removeURLPrefix(charPtrToStringRef(test_url)).data, test_port, dref, &out, 5000000); \
+    int err = rawRequest(removeURLPrefix(charPtrToStringRef(test_url)).data, test_port, dref, &out, 5000000, -1); \
     if (!err) { \
         removeHeaderField(out.data, "Age"); \
         removeHeaderField(out.data, "Date"); \
@@ -93,30 +93,26 @@ void testServerHandler(void *server_handler_args) {
         free(args);
 }
 
-// TODO debug with echo "hello" | ncat 127.0.0.1 54321
-// TODO debug with net77testing.py in my wsl
-// TODO DEBUG DEBUG DEBUG DEBUG!!!!!!!!!!!!!!!!
-int testServer(void) {
-    const char *host = "127.0.0.1";
-    const int port = 54321;
-    ThreadPool thread_pool = newThreadPool(0, testServerHandler);
-    runServer(&thread_pool, NULL, host, port, 2, -1, 50000, 128, 5000000);
-//    size_t thread = launchServerOnThread(testServerHandler, NULL, host, port, 2, -1, 5000000);
-//    threadJoin(thread);
-    return 1;
-//    if (thread == -1)
-//        return -1;
-//    const char msg[] = "hello";
-//    StringRef data = {sizeof(msg), msg};
-//    String out = {0, NULL};
-//    long long x = 0;
-//    while (x < 10000000000) x++;
-//    int err = newSocketSendReceiveClose(host, port, data, &out, -1, 5000000);
-//    if (err)
-//        return err;
-//    if (strcmp(out.data, "hi") == 0)
-//        return 0;
-//    return 69;
+#define MAKE_SERVER_TEST(connection_timeout, num_threads, on_equals_ret, else_ret, name_suffix) \
+int test##name_suffix(void) { \
+    const char *host = "127.0.0.1"; \
+    const int port = 54321; \
+    ThreadPool thread_pool = newThreadPool(num_threads, testServerHandler); \
+    const long long connection_timeout_usec = connection_timeout; \
+    size_t thread = launchServerOnThread(&thread_pool, NULL, host, port, 2, -1, 50000, 128, connection_timeout_usec); \
+    if (thread == -1) \
+        return -1; \
+    const char msg[] = "hello\r\n"; \
+    StringRef data = {sizeof(msg), msg}; \
+    String out = {0, NULL}; \
+    long long x = 0; \
+    while (x < 10000000000) x++; \
+    int err = newSocketSendReceiveClose(host, port, data, &out, -1, 500000, 128); \
+    if (err) \
+        return err; \
+    if (strcmp(out.data, "hi\r\n") == 0) \
+        return on_equals_ret; \
+    return else_ret; \
 }
 
 MAKE_PARSE_TEST(REQ_TEST1, Request, ParseReq1, 1);
@@ -141,17 +137,28 @@ MAKE_RAW_REQUEST_TEST(GET_REQ_TEST1, "http://www.example.com", 80, GET_REQ_TARGE
 
 MAKE_RAW_REQUEST_TEST(GET_REQ_TEST1, "https://www.example.com", 80, GET_REQ_TARGET1, GetReq1UrlPrefix2);
 
+MAKE_SERVER_TEST(10000, 4, 0, 69, Server1);
+
+MAKE_SERVER_TEST(10000, 0, 0, 69, SingleThreadedServer1);
+
+MAKE_SERVER_TEST(0, 4, 69, 0, ShouldTimeoutServer1);
+
 int (*const tests[])(void) = {testParseReq1, testParseReqMinimal1, testParseResp1, testParseReq1HeadToStr,
                               testParseReqMinimal1HeadToStr, testParseResp1HeadToStr, testSerdeReq1, testSerdeResp1,
-                              testGetReq1, testGetReq1UrlPrefix1, testGetReq1UrlPrefix2, testServer};
+                              testGetReq1, testGetReq1UrlPrefix1, testGetReq1UrlPrefix2, testServer1,
+                              testSingleThreadedServer1, testShouldTimeoutServer1};
 
-int print_on_pass = 0;
+int print_on_pass = 1;
 int print_pre_run_msg = 0;
 int run_all_tests = 0;
-const char *selected_test = "testServer";
+const char *selected_test = "testShouldTimeoutServer1";
 const char *names[] = {"testParseReq1", "testParseReqMinimal1", "testParseResp1", "testParseReq1HeadToStr",
                        "testParseReqMinimal1HeadToStr", "testParseResp1HeadToStr", "testSerdeReq1", "testSerdeResp1",
-                       "testGetReq1", "testGetReq1UrlPrefix1", "testGetReq1UrlPrefix2", "testServer"};
+                       "testGetReq1", "testGetReq1UrlPrefix1", "testGetReq1UrlPrefix2", "testServer1",
+                       "testSingleThreadedServer1", "testShouldTimeoutServer1"};
+
+// TODO the testShouldTimeoutServer1 test doesn't pass sometimes. idk how it manages to send data with literally 0 microseconds timeout but hey, maybe it can get the data in in the one loop iter before the timeout is checked :)
+// TODO it does seem to have passed 12/12 times though when I did a big repeated run of that single test, so idk
 
 int main(void) {
     socketInit();
@@ -159,6 +166,7 @@ int main(void) {
         printf("Warning: not every test has a name entry!\n");
 
     int all_passed = 1;
+    for (int k = 0; k < 100; k++) {
     for (int i = 0; i < sizeof(tests) / sizeof(int (*const)(void)); i++) {
         const char *name = names[i];
         if (!run_all_tests && strcmp(name, selected_test) != 0)
@@ -172,6 +180,7 @@ int main(void) {
         } else if (print_on_pass) {
             printf("Test %s... Passed\n", name);
         }
+    }
     }
     if (all_passed)
         printf("All tests passed!\n");

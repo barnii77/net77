@@ -24,7 +24,7 @@ StringRef charPtrToStringRef(const char *data) {
     return out;
 }
 
-#ifdef _MSC_VER
+#if defined(_WIN32) || defined(_WIN64)
 
 int setSendRecvTimeout(size_t fd, int timeout_usec) {
     if (timeout_usec >= 0) {

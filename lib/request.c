@@ -5,19 +5,19 @@
 
 #define BUBBLE_UP_ERR(err) if (err) return 1
 
-int request(const char *host, int port, Request *req, String *out, int request_timeout_usec) {
+int request(const char *host, int port, Request *req, String *out, int request_timeout_usec, size_t max_response_size) {
     StringBuilder builder = newStringBuilder(0);
     BUBBLE_UP_ERR(serializeRequest(req, &builder));
     String str = stringBuilderBuildAndDestroy(&builder);
     StringRef str_ref = {str.len, str.data};
-    int err = newSocketSendReceiveClose(host, port, str_ref, out, -1, request_timeout_usec);
+    int err = newSocketSendReceiveClose(host, port, str_ref, out, -1, request_timeout_usec, max_response_size);
     if (!err)
         freeString(&str);
     return err;
 }
 
-int rawRequest(const char *host, int port, StringRef req, String *out, int request_timeout_usec) {
-    return newSocketSendReceiveClose(host, port, req, out, -1, request_timeout_usec);
+int rawRequest(const char *host, int port, StringRef req, String *out, int request_timeout_usec, size_t max_response_size) {
+    return newSocketSendReceiveClose(host, port, req, out, -1, request_timeout_usec, max_response_size);
 }
 
 RequestBuilder newRequestBuilder(Method method, StringRef url, Version version) {
