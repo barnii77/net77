@@ -143,6 +143,7 @@ int newSocketSendReceiveClose(const char *host, int port, StringRef data, String
     }
 
     // Send data
+    // TODO i read online that send does not always send all the data in one go. this means that actually, I will need a wrapper function for send so the send macro gets replaced by a call to the send wrapper which will call the real send in a loop until it is done sending
     if (send(client_fd, data.data, data.len) < 0) {
         close(client_fd);
         return 1;
