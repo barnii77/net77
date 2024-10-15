@@ -6,6 +6,8 @@
 
 int setSendRecvTimeout(size_t fd, int timeout_usec);
 
+int sendAllData(size_t socket, const void *buf, size_t len);
+
 // Detect Windows system
 #if defined(_WIN32) || defined(_WIN64)
 // Include Windows-specific headers
@@ -19,7 +21,7 @@ typedef SSIZE_T ssize_t;
 // Define types and constants that Windows doesn't have, but POSIX systems do
 typedef int socklen_t;  // Windows uses int for socket length
 #define close closesocket  // POSIX uses close(), Windows uses closesocket()
-#define send(socket, buf, len) send(socket, buf, len, 0)
+#define send(socket, buf, len) sendAllData(socket, buf, len)
 #define recv(socket, buf, len) recv(socket, buf, len, 0)
 
 #ifndef SO_REUSEPORT
@@ -32,10 +34,11 @@ typedef int socklen_t;  // Windows uses int for socket length
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <sys/socket.h>
-#include <unistd.h>  // for close(), recv(), send()
+#include <unistd.h>
 #include <stdint.h>
+#include <poll.h>
 
-#define send(socket, buf, len) send(socket, buf, len, MSG_NOSIGNAL)
+#define send(socket, buf, len) sendAllData(socket, buf, len)
 #define recv(socket, buf, len) recv(socket, buf, len, 0)
 #ifndef SO_REUSEPORT
 #define SO_REUSEPORT 0  // No-op on systems that don't support it

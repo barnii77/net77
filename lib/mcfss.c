@@ -2,9 +2,6 @@
 #include <string.h>
 #include "net77/mcfss.h"
 
-#ifndef NET77_FIXED_SIZE_SET_H
-#define NET77_FIXED_SIZE_SET_H
-
 static size_t findInArray(const char *data, size_t len, const char *item, size_t item_size) {
     for (size_t i = 0; i < len; i++)
         if (memcmp(&data[i * item_size], item, item_size) == 0)
@@ -69,5 +66,3 @@ void mcfsSetDestroy(MultiCategoryFixedSizeSet *set) {
     set->len = 0;
     set->cap = 0;
 }
-
-#endif

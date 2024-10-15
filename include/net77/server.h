@@ -38,13 +38,17 @@ typedef void (*ServerHandler)(void *server_handler_args);
  * @param request_timeout_usec after how many microseconds a request times out
  * @param max_request_size maximum size (in bytes) that the data of a request sent to the server must have before it is discarded and ignored. 0 means no limit.
  * @param connection_timeout_usec after how many microseconds a request times out
+ * @param server_killed pointer to int. server terminates gracefully when the value pointed to turns non-zero.
+ * @param kill_ack set to one when the server has been killed, all conns have been closed and all buffers freed.
  * @return err (0 means success)
  */
 int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int port, int max_concurrent_connections,
-              int server_buf_size, int request_timeout_usec, size_t max_request_size, size_t connection_timeout_usec);
+              int server_buf_size, int request_timeout_usec, size_t max_request_size, size_t connection_timeout_usec,
+              const int *server_killed, int *kill_ack);
 
 size_t launchServerOnThread(ThreadPool *thread_pool, void *handler_data, const char *host, int port,
                             int max_concurrent_connections, int server_buf_size, int request_timeout_usec,
-                            size_t max_request_size, size_t connection_timeout_usec);
+                            size_t max_request_size, size_t connection_timeout_usec, const int *server_killed,
+                            int *kill_ack);
 
 #endif

@@ -1,4 +1,5 @@
 #include <string.h>
+#include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include "net77/serde.h"
@@ -99,20 +100,91 @@ int test##name_suffix(void) { \
     const int port = 54321; \
     ThreadPool thread_pool = newThreadPool(num_threads, testServerHandler); \
     const long long connection_timeout_usec = connection_timeout; \
-    size_t thread = launchServerOnThread(&thread_pool, NULL, host, port, 2, -1, 50000, 128, connection_timeout_usec); \
+    int server_killed = 0, kill_ack = 0; \
+    size_t thread = launchServerOnThread(&thread_pool, NULL, host, port, 2, -1, 50000, 128, connection_timeout_usec, &server_killed, &kill_ack); \
     if (thread == -1) \
         return -1; \
     const char msg[] = "hello\r\n"; \
     StringRef data = {sizeof(msg), msg}; \
     String out = {0, NULL}; \
     long long x = 0; \
-    while (x < 10000000000) x++; \
+    while (x < 200000000) x++; \
     int err = newSocketSendReceiveClose(host, port, data, &out, -1, 500000, 128); \
+    server_killed = 1; \
+    while (!kill_ack); \
+    threadPoolDestroy(&thread_pool); \
     if (err) \
         return err; \
     if (strcmp(out.data, "hi\r\n") == 0) \
         return on_equals_ret; \
     return else_ret; \
+}
+
+void testServerHandlerBigData(void *server_handler_args) {
+    const int n_msg_reps = 20000;
+    ServerHandlerArgs *args = server_handler_args;
+    char *resp = malloc(n_msg_reps * strlen("hi\r\n"));
+    for (int i = 0; i < n_msg_reps; i++) {
+        memcpy(&resp[i * strlen("hi\r\n")], "hi\r\n", strlen("hi\r\n"));
+    }
+
+    int all_strcmp = 1;
+    for (int i = 0; i < n_msg_reps; i++) {
+        if (strncmp(&args->data[i * strlen("hello\r\n")], "hello\r\n", strlen("hello\r\n")) != 0) {
+            all_strcmp = 0;
+            break;
+        }
+    }
+    printf("da big one %d\n", all_strcmp);
+    if (all_strcmp) {
+        int send_out = send(args->socket_fd, resp, n_msg_reps * strlen("hi\r\n"));
+        assert(!send_out);
+    }
+    free(args->data);
+    if (args->heap_allocated)
+        free(args);
+}
+
+// TODO debug this test. fascinatingly, I can get myself into a state (sometimes) where for one message, 2 jobs get dispatched and one thread ends up with an empty args->data field
+
+int testServerBigData1(void) {
+    const int n_msg_reps = 20000;
+    const int max_req_size = 999999999;
+    const char *host = "127.0.0.1";
+    const int port = 54321;
+    ThreadPool thread_pool = newThreadPool(4, testServerHandlerBigData);
+    const long long connection_timeout_usec = 10000000;
+    int server_killed = 0, kill_ack = 0;
+    size_t thread = launchServerOnThread(&thread_pool, NULL, host, port, 2, -1, 5000000, max_req_size,
+                                         connection_timeout_usec, &server_killed, &kill_ack);
+    if (thread == -1)
+        return -1;
+    char *msg = malloc(strlen("hello\r\n") * n_msg_reps);
+    for (int i = 0; i < n_msg_reps; i++) {
+        memcpy(&msg[i * strlen("hello\r\n")], "hello\r\n", strlen("hello\r\n"));
+    }
+    StringRef data = {strlen("hello\r\n") * n_msg_reps, msg};
+    String out = {0, NULL};
+    long long x = 0;
+    while (x < 200000000) x++;
+    x = 0;
+    int err = newSocketSendReceiveClose(host, port, data, &out, -1, 5000000, max_req_size);
+    while (x < 200000000) x++;
+    server_killed = 1;
+    while (!kill_ack);
+    threadPoolDestroy(&thread_pool);
+    if (err)
+        return err;
+    int all_strcmp = 1;
+    for (int i = 0; i < n_msg_reps; i++) {
+        if (strncmp(&out.data[i * strlen("hi\r\n")], "hi\r\n", strlen("hi\r\n")) != 0) {
+            all_strcmp = 0;
+            break;
+        }
+    }
+    if (all_strcmp)
+        return 0;
+    return 69;
 }
 
 MAKE_PARSE_TEST(REQ_TEST1, Request, ParseReq1, 1);
@@ -146,19 +218,18 @@ MAKE_SERVER_TEST(0, 4, 69, 0, ShouldTimeoutServer1);
 int (*const tests[])(void) = {testParseReq1, testParseReqMinimal1, testParseResp1, testParseReq1HeadToStr,
                               testParseReqMinimal1HeadToStr, testParseResp1HeadToStr, testSerdeReq1, testSerdeResp1,
                               testGetReq1, testGetReq1UrlPrefix1, testGetReq1UrlPrefix2, testServer1,
-                              testSingleThreadedServer1, testShouldTimeoutServer1};
+                              testSingleThreadedServer1, testShouldTimeoutServer1, testServerBigData1};
 
-int print_on_pass = 1;
+int print_on_pass = 0;
 int print_pre_run_msg = 0;
 int run_all_tests = 0;
-const char *selected_test = "testShouldTimeoutServer1";
+const char *selected_test = "testServerBigData1";
 const char *names[] = {"testParseReq1", "testParseReqMinimal1", "testParseResp1", "testParseReq1HeadToStr",
                        "testParseReqMinimal1HeadToStr", "testParseResp1HeadToStr", "testSerdeReq1", "testSerdeResp1",
                        "testGetReq1", "testGetReq1UrlPrefix1", "testGetReq1UrlPrefix2", "testServer1",
-                       "testSingleThreadedServer1", "testShouldTimeoutServer1"};
+                       "testSingleThreadedServer1", "testShouldTimeoutServer1", "testServerBigData1"};
 
-// TODO the testShouldTimeoutServer1 test doesn't pass sometimes. idk how it manages to send data with literally 0 microseconds timeout but hey, maybe it can get the data in in the one loop iter before the timeout is checked :)
-// TODO it does seem to have passed 12/12 times though when I did a big repeated run of that single test, so idk
+// TODO I should replace all timeout params, currently of type int, with size_t's
 
 int main(void) {
     socketInit();
@@ -166,7 +237,6 @@ int main(void) {
         printf("Warning: not every test has a name entry!\n");
 
     int all_passed = 1;
-    for (int k = 0; k < 100; k++) {
     for (int i = 0; i < sizeof(tests) / sizeof(int (*const)(void)); i++) {
         const char *name = names[i];
         if (!run_all_tests && strcmp(name, selected_test) != 0)
@@ -180,7 +250,6 @@ int main(void) {
         } else if (print_on_pass) {
             printf("Test %s... Passed\n", name);
         }
-    }
     }
     if (all_passed)
         printf("All tests passed!\n");

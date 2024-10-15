@@ -19,6 +19,8 @@ typedef struct RunServerArgs {
     int request_timeout_usec;
     size_t max_request_size;
     size_t connection_timeout_usec;
+    const int *server_killed;
+    int *kill_ack;
 } RunServerArgs;
 
 void threadStartServer(void *run_server_args) {
@@ -32,14 +34,17 @@ void threadStartServer(void *run_server_args) {
     int request_timeout_usec = args->request_timeout_usec;
     size_t max_request_size = args->max_request_size;
     size_t connection_timeout_usec = args->connection_timeout_usec;
+    const int *server_killed = args->server_killed;
+    int *kill_ack = args->kill_ack;
     free(run_server_args);
     runServer(thread_pool, handler_data, host, port, max_concurrent_connections, server_buf_size, request_timeout_usec,
-              max_request_size, connection_timeout_usec);
+              max_request_size, connection_timeout_usec, server_killed, kill_ack);
 }
 
 size_t launchServerOnThread(ThreadPool *thread_pool, void *handler_data, const char *host,
                             int port, int max_concurrent_connections, int server_buf_size, int request_timeout_usec,
-                            size_t max_request_size, size_t connection_timeout_usec) {
+                            size_t max_request_size, size_t connection_timeout_usec, const int *server_killed,
+                            int *kill_ack) {
     RunServerArgs *args = malloc(sizeof(RunServerArgs));
     args->thread_pool = thread_pool;
     args->handler_data = handler_data;
@@ -50,6 +55,8 @@ size_t launchServerOnThread(ThreadPool *thread_pool, void *handler_data, const c
     args->request_timeout_usec = request_timeout_usec;
     args->max_request_size = max_request_size;
     args->connection_timeout_usec = connection_timeout_usec;
+    args->server_killed = server_killed;
+    args->kill_ack = kill_ack;
     return threadCreate(threadStartServer, args);
 }
 
@@ -161,7 +168,6 @@ int runServer(ServerHandler handler, void *handler_data, const char *host,
 
 #else
 
-#include <poll.h>
 #include <fcntl.h>
 #include <sys/time.h>
 
@@ -171,7 +177,7 @@ static size_t getTimeInUSecs() {
     return (size_t) (time.tv_sec) * 1000000 + (size_t) (time.tv_usec);
 }
 
-int makeNonBlocking(int fd) {
+static int makeNonBlocking(int fd) {
     int flags, fco;
     if ((flags = fcntl(fd, F_GETFL, 0)) < 0)
         return flags;
@@ -181,7 +187,8 @@ int makeNonBlocking(int fd) {
 }
 
 int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int port, int max_concurrent_connections,
-              int server_buf_size, int request_timeout_usec, size_t max_request_size, size_t connection_timeout_usec) {
+              int server_buf_size, int request_timeout_usec, size_t max_request_size, size_t connection_timeout_usec,
+              const int *server_killed, int *kill_ack) {
     if (max_concurrent_connections < 0)
         max_concurrent_connections = DEFAULT_MAX_ACCEPTED_CONNECTIONS;
     if (server_buf_size < 0)
@@ -249,7 +256,7 @@ int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int
         return 1;
     ConnState conn_state = {.stop_server = 0, .discard_conn = 0};
 
-    while (!conn_state.stop_server) {
+    while (!conn_state.stop_server && !*server_killed) {
         int new_socket;
         if (timed_conn_pollfds.len < timed_conn_pollfds.cap &&
             (new_socket = accept(server_fd, (struct sockaddr *) &client_addr, &addrlen)) >= 0) {
@@ -267,6 +274,8 @@ int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int
             }
         }
 
+        // TODO I think I could use poll_ret in the loop to shortcut the rest of the connections if the num connections which had an event is equal to poll_ret
+        // but I will have to make sure I actually can
         int poll_ret = poll((struct pollfd *) timed_conn_pollfds.data[0], timed_conn_pollfds.len, 0);
         if (poll_ret > 0) {
             struct pollfd *end = ((struct pollfd *) timed_conn_pollfds.data[0]) + timed_conn_pollfds.len;
@@ -302,7 +311,8 @@ int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int
                         *time_last_usage_ptr = getTimeInUSecs();
                     }
 
-                    if (failed) {
+                    // poll will trigger a POLLIN event where recv will just return 0 instantly if connection is closed
+                    if (failed || (builder.len == 0 && conn_was_closed)) {
                         stringBuilderDestroy(&builder);
                     } else {
                         String str = stringBuilderBuildAndDestroy(&builder);
@@ -317,6 +327,7 @@ int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int
                         };
                         ServerHandlerArgs *args;
                         if (thread_pool->size) {
+                            args_data.heap_allocated = 1;
                             args = malloc(sizeof(ServerHandlerArgs));
                             *args = args_data;
                         } else {
@@ -333,8 +344,10 @@ int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int
                     }
                     conn_state.discard_conn = 0;
                 }
-                if (conn_was_closed)
+                if (conn_was_closed) {
+                    pfd--;
                     continue;
+                }
 
                 if (pfd->revents & (POLLERR | POLLHUP)) {
                     pfd->revents = 0;
@@ -342,16 +355,20 @@ int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int
                         close(fd);
                     conn_was_closed = 1;
                 }
-                if (conn_was_closed)
+                if (conn_was_closed) {
+                    pfd--;
                     continue;
+                }
 
                 if (pfd->revents & POLLNVAL) {
                     pfd->revents = 0;
                     mcfsSetRemove(&timed_conn_pollfds, (const char *) &pfd, 0);
                     conn_was_closed = 1;
                 }
-                if (conn_was_closed)
+                if (conn_was_closed) {
+                    pfd--;
                     continue;
+                }
             }
         }
 
@@ -379,6 +396,10 @@ int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int
     mcfsSetDestroy(&timed_conn_pollfds);
 
     close(server_fd);
+
+    // signal that the server is dead now (useful in multithreaded contexts)
+    *kill_ack = 1;
+
     return 0;
 }
 
