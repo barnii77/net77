@@ -43,12 +43,12 @@ typedef void (*ServerHandler)(void *server_handler_args);
  * @return err (0 means success)
  */
 int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int port, int max_concurrent_connections,
-              int server_buf_size, int request_timeout_usec, size_t max_request_size, size_t connection_timeout_usec,
+              int server_buf_size, ssize_t request_timeout_usec, size_t max_request_size, ssize_t connection_timeout_usec,
               const int *server_killed, int *kill_ack);
 
 size_t launchServerOnThread(ThreadPool *thread_pool, void *handler_data, const char *host, int port,
-                            int max_concurrent_connections, int server_buf_size, int request_timeout_usec,
-                            size_t max_request_size, size_t connection_timeout_usec, const int *server_killed,
+                            int max_concurrent_connections, int server_buf_size, ssize_t request_timeout_usec,
+                            size_t max_request_size, ssize_t connection_timeout_usec, const int *server_killed,
                             int *kill_ack);
 
 #endif

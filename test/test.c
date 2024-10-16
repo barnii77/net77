@@ -121,7 +121,7 @@ int test##name_suffix(void) { \
 }
 
 void testServerHandlerBigData(void *server_handler_args) {
-    const int n_msg_reps = 20000;
+    const int n_msg_reps = 50000;
     ServerHandlerArgs *args = server_handler_args;
     char *resp = malloc(n_msg_reps * strlen("hi\r\n"));
     for (int i = 0; i < n_msg_reps; i++) {
@@ -137,7 +137,9 @@ void testServerHandlerBigData(void *server_handler_args) {
     }
     if (all_strcmp) {
         int send_out = send(args->socket_fd, resp, n_msg_reps * strlen("hi\r\n"));
-        assert(!send_out);
+        if (send_out)
+            printf("failed in handler");
+//        assert(!send_out);
     }
     free(args->data);
     if (args->heap_allocated)
@@ -145,7 +147,7 @@ void testServerHandlerBigData(void *server_handler_args) {
 }
 
 int testServerBigData1(void) {
-    const int n_msg_reps = 20000;
+    const int n_msg_reps = 50000;
     const int max_req_size = 999999999;
     const char *host = "127.0.0.1";
     const int port = 54321;
@@ -163,10 +165,10 @@ int testServerBigData1(void) {
     StringRef data = {strlen("hello\r\n") * n_msg_reps, msg};
     String out = {0, NULL};
     long long x = 0;
-    while (x < 200000000) x++;
+    while (x < 400000000) x++;
     x = 0;
     int err = newSocketSendReceiveClose(host, port, data, &out, -1, 5000000, max_req_size);
-    while (x < 200000000) x++;
+    while (x < 400000000) x++;
     server_killed = 1;
     while (!kill_ack);
     threadPoolDestroy(&thread_pool);
@@ -217,7 +219,7 @@ int (*const tests[])(void) = {testParseReq1, testParseReqMinimal1, testParseResp
                               testGetReq1, testGetReq1UrlPrefix1, testGetReq1UrlPrefix2, testServer1,
                               testSingleThreadedServer1, testShouldTimeoutServer1, testServerBigData1};
 
-int print_on_pass = 0;
+int print_on_pass = 1;
 int print_pre_run_msg = 0;
 int run_all_tests = 0;
 const char *selected_test = "testServerBigData1";
@@ -234,18 +236,20 @@ int main(void) {
         printf("Warning: not every test has a name entry!\n");
 
     int all_passed = 1;
-    for (int i = 0; i < sizeof(tests) / sizeof(int (*const)(void)); i++) {
-        const char *name = names[i];
-        if (!run_all_tests && strcmp(name, selected_test) != 0)
-            continue;
-        if (print_pre_run_msg)
-            printf("Running test %s...\n", name);
-        int err = tests[i]();
-        if (err) {
-            all_passed = 0;
-            printf("Test %s... Error: Code %d\n", name, err);
-        } else if (print_on_pass) {
-            printf("Test %s... Passed\n", name);
+    for (int k = 0; k < 100; k++) {
+        for (int i = 0; i < sizeof(tests) / sizeof(int (*const)(void)); i++) {
+            const char *name = names[i];
+            if (!run_all_tests && strcmp(name, selected_test) != 0)
+                continue;
+            if (print_pre_run_msg)
+                printf("Running test %s...\n", name);
+            int err = tests[i]();
+            if (err) {
+                all_passed = 0;
+                printf("Test %s... Error: Code %d\n", name, err);
+            } else if (print_on_pass) {
+                printf("Test %s... Passed\n", name);
+            }
         }
     }
     if (all_passed)

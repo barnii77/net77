@@ -16,9 +16,9 @@ typedef struct RunServerArgs {
     int port;
     int max_concurrent_connections;
     int server_buf_size;
-    int request_timeout_usec;
+    ssize_t request_timeout_usec;
     size_t max_request_size;
-    size_t connection_timeout_usec;
+    ssize_t connection_timeout_usec;
     const int *server_killed;
     int *kill_ack;
 } RunServerArgs;
@@ -31,9 +31,9 @@ void threadStartServer(void *run_server_args) {
     int port = args->port;
     int max_concurrent_connections = args->max_concurrent_connections;
     int server_buf_size = args->server_buf_size;
-    int request_timeout_usec = args->request_timeout_usec;
+    ssize_t request_timeout_usec = args->request_timeout_usec;
     size_t max_request_size = args->max_request_size;
-    size_t connection_timeout_usec = args->connection_timeout_usec;
+    ssize_t connection_timeout_usec = args->connection_timeout_usec;
     const int *server_killed = args->server_killed;
     int *kill_ack = args->kill_ack;
     free(run_server_args);
@@ -42,8 +42,8 @@ void threadStartServer(void *run_server_args) {
 }
 
 size_t launchServerOnThread(ThreadPool *thread_pool, void *handler_data, const char *host,
-                            int port, int max_concurrent_connections, int server_buf_size, int request_timeout_usec,
-                            size_t max_request_size, size_t connection_timeout_usec, const int *server_killed,
+                            int port, int max_concurrent_connections, int server_buf_size, ssize_t request_timeout_usec,
+                            size_t max_request_size, ssize_t connection_timeout_usec, const int *server_killed,
                             int *kill_ack) {
     RunServerArgs *args = malloc(sizeof(RunServerArgs));
     args->thread_pool = thread_pool;
@@ -64,7 +64,7 @@ size_t launchServerOnThread(ThreadPool *thread_pool, void *handler_data, const c
 
 // TODO implement max_request_size and all the fancy features in the linux version
 int runServer(ServerHandler handler, void *handler_data, const char *host,
-              int port, int max_concurrent_connections, int server_buf_size, int request_timeout_usec, size_t max_request_size) {
+              int port, int max_concurrent_connections, int server_buf_size, ssize_t request_timeout_usec, size_t max_request_size) {
     if (max_concurrent_connections < 0)
         max_concurrent_connections = DEFAULT_MAX_ACCEPTED_CONNECTIONS;
     if (server_buf_size < 0)
@@ -187,8 +187,8 @@ static int makeNonBlocking(int fd) {
 }
 
 int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int port, int max_concurrent_connections,
-              int server_buf_size, int request_timeout_usec, size_t max_request_size, size_t connection_timeout_usec,
-              const int *server_killed, int *kill_ack) {
+              int server_buf_size, ssize_t request_timeout_usec, size_t max_request_size,
+              ssize_t connection_timeout_usec, const int *server_killed, int *kill_ack) {
     if (max_concurrent_connections < 0)
         max_concurrent_connections = DEFAULT_MAX_ACCEPTED_CONNECTIONS;
     if (server_buf_size < 0)
@@ -372,16 +372,18 @@ int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int
             }
         }
 
-        size_t time_now = getTimeInUSecs();
-        for (int i = 0; i < timed_conn_pollfds.len; i++) {
-            size_t pfd_bytes_idx = i * sizeof(timed_conn_pollfds.item_sizes[0]);
-            struct pollfd *pfd = (struct pollfd *) &timed_conn_pollfds.data[0][pfd_bytes_idx];
-            size_t time_bytes_idx = i * sizeof(timed_conn_pollfds.item_sizes[1]);
-            size_t time_last_usage = *(size_t *) &timed_conn_pollfds.data[1][time_bytes_idx];
-            if (time_now - time_last_usage > connection_timeout_usec) {
-                mcfsSetRemove(&timed_conn_pollfds, (const char *) pfd, 0);
-                close(pfd->fd);
-                i--;
+        if (connection_timeout_usec >= 0) {
+            size_t time_now = getTimeInUSecs();
+            for (int i = 0; i < timed_conn_pollfds.len; i++) {
+                size_t pfd_bytes_idx = i * sizeof(timed_conn_pollfds.item_sizes[0]);
+                struct pollfd *pfd = (struct pollfd *) &timed_conn_pollfds.data[0][pfd_bytes_idx];
+                size_t time_bytes_idx = i * sizeof(timed_conn_pollfds.item_sizes[1]);
+                size_t time_last_usage = *(size_t *) &timed_conn_pollfds.data[1][time_bytes_idx];
+                if (time_now - time_last_usage > connection_timeout_usec) {
+                    mcfsSetRemove(&timed_conn_pollfds, (const char *) pfd, 0);
+                    close(pfd->fd);
+                    i--;
+                }
             }
         }
     }

@@ -8,7 +8,7 @@
 #if defined(_WIN32) || defined(_WIN64)
 
 int newSocketSendReceiveClose(const char *host, int port, StringRef data, String *out, int client_buf_size,
-                              int request_timeout_usec) {
+                              ssize_t request_timeout_usec) {
     if (client_buf_size < 0)
         client_buf_size = DEFAULT_CLIENT_BUF_SIZE;
 
@@ -91,7 +91,7 @@ int newSocketSendReceiveClose(const char *host, int port, StringRef data, String
 #else
 
 int newSocketSendReceiveClose(const char *host, int port, StringRef data, String *out, int client_buf_size,
-                              int request_timeout_usec, size_t max_response_size) {
+                              ssize_t request_timeout_usec, size_t max_response_size) {
     if (client_buf_size < 0)
         client_buf_size = DEFAULT_CLIENT_BUF_SIZE;
 

@@ -19,6 +19,6 @@
  * @return err (0 means success)
  */
 int newSocketSendReceiveClose(const char *host, int port, StringRef data, String *out, int client_buf_size,
-                              int request_timeout_usec, size_t max_response_size);
+                              ssize_t request_timeout_usec, size_t max_response_size);
 
 #endif

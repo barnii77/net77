@@ -29,7 +29,7 @@ StringRef charPtrToStringRef(const char *data) {
 
 #if defined(_WIN32) || defined(_WIN64)
 
-int setSendRecvTimeout(size_t fd, int timeout_usec) {
+int setSendRecvTimeout(size_t fd, ssize_t timeout_usec) {
     if (timeout_usec >= 0) {
         struct timeval timeout;
         timeout.tv_sec = timeout_usec / 1000000;
@@ -46,7 +46,7 @@ int setSendRecvTimeout(size_t fd, int timeout_usec) {
 
 #else
 
-int setSendRecvTimeout(size_t fd, int timeout_usec) {
+int setSendRecvTimeout(size_t fd, ssize_t timeout_usec) {
     if (timeout_usec >= 0) {
         struct timeval timeout;
         timeout.tv_sec = timeout_usec / 1000000;

@@ -2,9 +2,10 @@
 #define N77NETINCLUDES_H
 
 #include <stddef.h>
-#include "init.h"
+#include "net77/init.h"
+#include "net77/int_includes.h"
 
-int setSendRecvTimeout(size_t fd, int timeout_usec);
+int setSendRecvTimeout(size_t fd, ssize_t timeout_usec);
 
 int sendAllData(size_t socket, const void *buf, size_t len);
 

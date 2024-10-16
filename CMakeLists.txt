@@ -31,6 +31,7 @@ add_library(net77 STATIC
         lib/linked_list.c
         include/net77/thread_pool.h
         lib/thread_pool.c
+        include/net77/int_includes.h
 )
 
 add_executable(tests test/test.c)

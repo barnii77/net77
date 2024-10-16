@@ -2,10 +2,11 @@
 #include "net77/request.h"
 #include "net77/sock.h"
 #include "net77/utils.h"
+#include "net77/int_includes.h"
 
 #define BUBBLE_UP_ERR(err) if (err) return 1
 
-int request(const char *host, int port, Request *req, String *out, int request_timeout_usec, size_t max_response_size) {
+int request(const char *host, int port, Request *req, String *out, ssize_t request_timeout_usec, size_t max_response_size) {
     StringBuilder builder = newStringBuilder(0);
     BUBBLE_UP_ERR(serializeRequest(req, &builder));
     String str = stringBuilderBuildAndDestroy(&builder);
@@ -16,7 +17,7 @@ int request(const char *host, int port, Request *req, String *out, int request_t
     return err;
 }
 
-int rawRequest(const char *host, int port, StringRef req, String *out, int request_timeout_usec, size_t max_response_size) {
+int rawRequest(const char *host, int port, StringRef req, String *out, ssize_t request_timeout_usec, size_t max_response_size) {
     return newSocketSendReceiveClose(host, port, req, out, -1, request_timeout_usec, max_response_size);
 }
 
