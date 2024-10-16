@@ -135,7 +135,6 @@ void testServerHandlerBigData(void *server_handler_args) {
             break;
         }
     }
-    printf("da big one %d\n", all_strcmp);
     if (all_strcmp) {
         int send_out = send(args->socket_fd, resp, n_msg_reps * strlen("hi\r\n"));
         assert(!send_out);
@@ -144,8 +143,6 @@ void testServerHandlerBigData(void *server_handler_args) {
     if (args->heap_allocated)
         free(args);
 }
-
-// TODO debug this test. fascinatingly, I can get myself into a state (sometimes) where for one message, 2 jobs get dispatched and one thread ends up with an empty args->data field
 
 int testServerBigData1(void) {
     const int n_msg_reps = 20000;
