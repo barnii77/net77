@@ -2,7 +2,7 @@
 #define NET77_NET77HTTP_H
 
 #include <stddef.h>
-#include "string_utils.h"
+#include "net77/string_utils.h"
 
 typedef enum Version {
     VERSION_HTTP10,
@@ -11,9 +11,14 @@ typedef enum Version {
 
 typedef enum Method {
     METHOD_GET,
-    METHOD_POST,
     METHOD_HEAD,
-    // TODO support PUT, LINK, ...
+    METHOD_POST,
+    METHOD_PUT,
+    METHOD_DELETE,
+    METHOD_CONNECT,
+    METHOD_OPTIONS,
+    METHOD_TRACE,
+    METHOD_PATCH,
 } Method;
 
 typedef struct HeaderField {
@@ -58,6 +63,8 @@ typedef struct Response {
     Header head;
     StringRef body;
 } Response;
+
+int isValidRequest(Request *req);
 
 int parseRequest(StringRef str, Request *req, int parse_header_into_structs);
 

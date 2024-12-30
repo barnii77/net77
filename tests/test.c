@@ -7,9 +7,11 @@
 #include "net77/init.h"
 #include "net77/server.h"
 #include "net77/utils.h"
+#include "net77/logging.h"
 #include "net77/net_includes.h"
-#include "net77/thread_includes.h"
 #include "net77/sock.h"
+
+#define printAndFlush(msg, ...) {printf(msg, ##__VA_ARGS__); fflush(stdout);}
 
 const char *REQ_TEST1 = "GET /file/hello.jpg HTTP/1.1\r\nHost:www.example.com\r\n\r\n{\"json\": \"body\"}";
 const char *REQ_TEST_EMPTY_BODY_AND_HEADER1 = "GET / HTTP/1.1\r\n\r\nxyz";
@@ -65,7 +67,7 @@ int test##test_name(void) { \
 int test##test_name(void) { \
     StringRef dref = {strlen(test_data), test_data}; \
     String out; \
-    int err = rawRequest(removeURLPrefix(charPtrToStringRef(test_url)).data, test_port, dref, &out, 5000000, -1); \
+    int err = rawRequest(removeURLPrefix(charPtrToStringRef(test_url)).data, test_port, dref, &out, -1, -1, -1); \
     if (!err) { \
         removeHeaderField(out.data, "Age"); \
         removeHeaderField(out.data, "Date"); \
@@ -87,41 +89,48 @@ void testServerHandler(void *server_handler_args) {
     ServerHandlerArgs *args = server_handler_args;
     const char resp[] = "hi\r\n";
     if (strcmp(args->data, "hello\r\n") == 0) {
-        send(args->socket_fd, resp, sizeof(resp));
+        sendAllData(args->socket_fd, resp, sizeof(resp), -1);
     }
     free(args->data);
     if (args->heap_allocated)
         free(args);
 }
 
-#define MAKE_SERVER_TEST(connection_timeout, num_threads, on_equals_ret, else_ret, name_suffix) \
+#define MAKE_SERVER_TEST(connection_timeout, num_threads, on_equals_ret, else_ret, on_err_ret, run_server_at_all, name_suffix) \
 int test##name_suffix(void) { \
     const char *host = "127.0.0.1"; \
     const int port = 54321; \
     ThreadPool thread_pool = newThreadPool(num_threads, testServerHandler); \
     const long long connection_timeout_usec = connection_timeout; \
-    int server_killed = 0, kill_ack = 0; \
-    size_t thread = launchServerOnThread(&thread_pool, NULL, host, port, 2, -1, 50000, 128, connection_timeout_usec, &server_killed, &kill_ack); \
-    if (thread == -1) \
-        return -1; \
+    UnsafeSignal server_killed = 0, kill_ack = 0, server_has_started = 0; \
+    if (run_server_at_all) { \
+        size_t thread = launchServerOnThread(&thread_pool, NULL, host, port, 2, -1, 50000, 128, connection_timeout_usec, &server_killed, &kill_ack, 0, &server_has_started); \
+        if (thread == -1) \
+            return -0xBAD; \
+        while (!server_has_started);  /* wait for server to start */ \
+    } \
+    usleep(5000); \
     const char msg[] = "hello\r\n"; \
     StringRef data = {sizeof(msg), msg}; \
     String out = {0, NULL}; \
-    long long x = 0; \
-    while (x < 200000000) x++; \
-    int err = newSocketSendReceiveClose(host, port, data, &out, -1, 500000, 128); \
-    server_killed = 1; \
-    while (!kill_ack); \
+    int err = newSocketSendReceiveClose(host, port, data, &out, -1, -1, 500000, 128, 0, 0); \
+    if (run_server_at_all) { \
+        server_killed = 1; \
+        while (!kill_ack); \
+    } \
     threadPoolDestroy(&thread_pool); \
     if (err) \
-        return err; \
+        return on_err_ret; \
     if (strcmp(out.data, "hi\r\n") == 0) \
         return on_equals_ret; \
     return else_ret; \
 }
 
+const int test_server_n_msg_reps = 10000;
+
 void testServerHandlerBigData(void *server_handler_args) {
-    const int n_msg_reps = 50000;
+    LOG_MSG("called testServerHandlerBigData at %zd\n", getTimeInUSecs() / 1000);
+    const int n_msg_reps = test_server_n_msg_reps;
     ServerHandlerArgs *args = server_handler_args;
     char *resp = malloc(n_msg_reps * strlen("hi\r\n"));
     for (int i = 0; i < n_msg_reps; i++) {
@@ -135,11 +144,11 @@ void testServerHandlerBigData(void *server_handler_args) {
             break;
         }
     }
+    LOG_MSG("testServerHandlerBigData done with checking request at %zd\n", getTimeInUSecs() / 1000);
     if (all_strcmp) {
-        int send_out = send(args->socket_fd, resp, n_msg_reps * strlen("hi\r\n"));
-        if (send_out)
-            printf("failed in handler");
-//        assert(!send_out);
+        int send_out = sendAllData(args->socket_fd, resp, n_msg_reps * strlen("hi\r\n"), -1);
+        assert(!send_out);
+        LOG_MSG("responded with 'hi\\r\\n' spam\n");
     }
     free(args->data);
     if (args->heap_allocated)
@@ -147,28 +156,28 @@ void testServerHandlerBigData(void *server_handler_args) {
 }
 
 int testServerBigData1(void) {
-    const int n_msg_reps = 50000;
-    const int max_req_size = 999999999;
+    const int n_msg_reps = test_server_n_msg_reps;
+    const size_t max_req_size = 99999999999;
     const char *host = "127.0.0.1";
     const int port = 54321;
-    ThreadPool thread_pool = newThreadPool(4, testServerHandlerBigData);
-    const long long connection_timeout_usec = 10000000;
-    int server_killed = 0, kill_ack = 0;
-    size_t thread = launchServerOnThread(&thread_pool, NULL, host, port, 2, -1, 5000000, max_req_size,
-                                         connection_timeout_usec, &server_killed, &kill_ack);
+    ThreadPool thread_pool = newThreadPool(0, testServerHandlerBigData);
+    const long long connection_timeout_usec = 1000000000;
+    const long long client_conn_timeout_usec = 1000000;
+    const long long recv_timeout_usec = 1;
+    UnsafeSignal server_killed = 0, kill_ack = 0, server_has_started = 0;
+    size_t thread = launchServerOnThread(&thread_pool, NULL, host, port, 2, -1, recv_timeout_usec, max_req_size,
+                                         connection_timeout_usec, &server_killed, &kill_ack, 0, &server_has_started);
     if (thread == -1)
         return -1;
+    while (!server_has_started);  // wait for server to start
+    usleep(5000);
     char *msg = malloc(strlen("hello\r\n") * n_msg_reps);
     for (int i = 0; i < n_msg_reps; i++) {
         memcpy(&msg[i * strlen("hello\r\n")], "hello\r\n", strlen("hello\r\n"));
     }
     StringRef data = {strlen("hello\r\n") * n_msg_reps, msg};
     String out = {0, NULL};
-    long long x = 0;
-    while (x < 400000000) x++;
-    x = 0;
-    int err = newSocketSendReceiveClose(host, port, data, &out, -1, 5000000, max_req_size);
-    while (x < 400000000) x++;
+    int err = newSocketSendReceiveClose(host, port, data, &out, -1, -1, client_conn_timeout_usec, max_req_size, 0, 0);
     server_killed = 1;
     while (!kill_ack);
     threadPoolDestroy(&thread_pool);
@@ -181,6 +190,8 @@ int testServerBigData1(void) {
             break;
         }
     }
+    freeString(&out);
+    free(msg);
     if (all_strcmp)
         return 0;
     return 69;
@@ -208,52 +219,83 @@ MAKE_RAW_REQUEST_TEST(GET_REQ_TEST1, "http://www.example.com", 80, GET_REQ_TARGE
 
 MAKE_RAW_REQUEST_TEST(GET_REQ_TEST1, "https://www.example.com", 80, GET_REQ_TARGET1, GetReq1UrlPrefix2);
 
-MAKE_SERVER_TEST(10000, 4, 0, 69, Server1);
+MAKE_SERVER_TEST(10000, 4, 0, 69, 0xDEAD, 1, Server1);
 
-MAKE_SERVER_TEST(10000, 0, 0, 69, SingleThreadedServer1);
+MAKE_SERVER_TEST(10000, 0, 0, 69, 0xDEAD, 1, SingleThreadedServer1);
 
-MAKE_SERVER_TEST(0, 4, 69, 0, ShouldTimeoutServer1);
-
-int (*const tests[])(void) = {testParseReq1, testParseReqMinimal1, testParseResp1, testParseReq1HeadToStr,
-                              testParseReqMinimal1HeadToStr, testParseResp1HeadToStr, testSerdeReq1, testSerdeResp1,
-                              testGetReq1, testGetReq1UrlPrefix1, testGetReq1UrlPrefix2, testServer1,
-                              testSingleThreadedServer1, testShouldTimeoutServer1, testServerBigData1};
+MAKE_SERVER_TEST(0, 4, 69, 42, 0, 0, ShouldTimeoutServer1);
 
 int print_on_pass = 1;
 int print_pre_run_msg = 0;
-int run_all_tests = 0;
+int run_all_tests = 1;
+int n_test_reps = 1;
 const char *selected_test = "testServerBigData1";
-const char *names[] = {"testParseReq1", "testParseReqMinimal1", "testParseResp1", "testParseReq1HeadToStr",
-                       "testParseReqMinimal1HeadToStr", "testParseResp1HeadToStr", "testSerdeReq1", "testSerdeResp1",
-                       "testGetReq1", "testGetReq1UrlPrefix1", "testGetReq1UrlPrefix2", "testServer1",
-                       "testSingleThreadedServer1", "testShouldTimeoutServer1", "testServerBigData1"};
 
-// TODO I should replace all timeout params, currently of type int, with size_t's
+#define REGISTER_TEST_CASE(test_name) \
+{ \
+    *names = realloc(*names, (n_test_cases + 1) * sizeof(char *)); \
+    (*names)[n_test_cases] = #test_name; \
+    *tests = realloc(*tests, (n_test_cases + 1) * sizeof(int (*)(void))); \
+    (*tests)[n_test_cases] = test_name; \
+    n_test_cases++; \
+}
+
+int buildTestCases(const char ***names, int (***tests)(void)) {
+    int n_test_cases = 0;
+    *names = malloc(1 * sizeof(char *));
+    *tests = malloc(1 * sizeof(int (*)(void)));
+
+    // Evil macro magic
+    REGISTER_TEST_CASE(testParseReq1);
+    REGISTER_TEST_CASE(testParseReqMinimal1);
+    REGISTER_TEST_CASE(testParseResp1);
+    REGISTER_TEST_CASE(testParseReq1HeadToStr);
+    REGISTER_TEST_CASE(testParseReqMinimal1HeadToStr);
+    REGISTER_TEST_CASE(testParseResp1HeadToStr);
+    REGISTER_TEST_CASE(testSerdeReq1);
+    REGISTER_TEST_CASE(testSerdeResp1);
+    REGISTER_TEST_CASE(testGetReq1);
+    REGISTER_TEST_CASE(testGetReq1UrlPrefix1);
+    REGISTER_TEST_CASE(testGetReq1UrlPrefix2);
+    REGISTER_TEST_CASE(testServer1);
+    REGISTER_TEST_CASE(testSingleThreadedServer1);
+    REGISTER_TEST_CASE(testShouldTimeoutServer1);
+    REGISTER_TEST_CASE(testServerBigData1);
+
+    return n_test_cases;
+}
 
 int main(void) {
+    const char **names;
+    int (**tests)(void);
+    int n_tests = buildTestCases(&names, &tests);
     socketInit();
-    if (sizeof(names) / sizeof(char *) != sizeof(tests) / sizeof(int (*const)(void)))
-        printf("Warning: not every test has a name entry!\n");
-
-    int all_passed = 1;
-    for (int k = 0; k < 100; k++) {
-        for (int i = 0; i < sizeof(tests) / sizeof(int (*const)(void)); i++) {
+    int tests_always_passed = 1;
+    int n_total_failed = 0;
+    for (int k = 0; k < n_test_reps; k++) {
+        int all_passed = 1;
+        int n_failed = 0;
+        for (int i = 0; i < n_tests; i++) {
             const char *name = names[i];
             if (!run_all_tests && strcmp(name, selected_test) != 0)
                 continue;
-            if (print_pre_run_msg)
-                printf("Running test %s...\n", name);
+            if (print_pre_run_msg) printAndFlush("Running test %s...\n", name);
             int err = tests[i]();
             if (err) {
                 all_passed = 0;
-                printf("Test %s... Error: Code %d\n", name, err);
+                tests_always_passed = 0;
+                n_failed++;
+                n_total_failed++;
+                printAndFlush("Test %s... Error: Code 0x%X (%d)\n", name, err, err);
             } else if (print_on_pass) {
-                printf("Test %s... Passed\n", name);
+                printAndFlush("Test %s... Passed\n", name);
             }
         }
+        if (n_test_reps > 1 && all_passed) printAndFlush("All tests passed this iteration!\n")
+        else if (n_test_reps > 1) printAndFlush("%d/%d tests failed this iteration!\n", n_failed, n_tests);
     }
-    if (all_passed)
-        printf("All tests passed!\n");
+    if (tests_always_passed) printAndFlush("*** ALL TESTS PASSED EVERY SINGLE TIME! ***\n")
+    else printAndFlush("*** %d/%d TESTS FAILED OVERALL! ***\n", n_total_failed, n_tests * n_test_reps);
     socketCleanup();
     return 0;
 }

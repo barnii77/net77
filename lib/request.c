@@ -6,19 +6,27 @@
 
 #define BUBBLE_UP_ERR(err) if (err) return 1
 
-int request(const char *host, int port, Request *req, String *out, ssize_t request_timeout_usec, size_t max_response_size) {
+// after the initial response bytes are received, we wait for this many more microseconds for more response bytes
+#define REQUEST_RESPONSE_ACCUM_TIME_USEC 50000
+
+int
+request(const char *host, int port, Request *req, String *out, size_t max_response_size, ssize_t connect_timeout_usec,
+        ssize_t response_timeout_usec) {
     StringBuilder builder = newStringBuilder(0);
     BUBBLE_UP_ERR(serializeRequest(req, &builder));
     String str = stringBuilderBuildAndDestroy(&builder);
     StringRef str_ref = {str.len, str.data};
-    int err = newSocketSendReceiveClose(host, port, str_ref, out, -1, request_timeout_usec, max_response_size);
+    int err = newSocketSendReceiveClose(host, port, str_ref, out, -1, connect_timeout_usec, response_timeout_usec,
+                                        max_response_size, REQUEST_RESPONSE_ACCUM_TIME_USEC, 0);
     if (!err)
         freeString(&str);
     return err;
 }
 
-int rawRequest(const char *host, int port, StringRef req, String *out, ssize_t request_timeout_usec, size_t max_response_size) {
-    return newSocketSendReceiveClose(host, port, req, out, -1, request_timeout_usec, max_response_size);
+int rawRequest(const char *host, int port, StringRef req, String *out, size_t max_response_size,
+               ssize_t connect_timeout_usec, ssize_t response_timeout_usec) {
+    return newSocketSendReceiveClose(host, port, req, out, -1, connect_timeout_usec, response_timeout_usec,
+                                     max_response_size, REQUEST_RESPONSE_ACCUM_TIME_USEC, 0);
 }
 
 RequestBuilder newRequestBuilder(Method method, StringRef url, Version version) {
@@ -89,4 +97,12 @@ Response responseBuilderBuildAndDestroy(ResponseBuilder *rb) {
     Response resp = rb->resp;
     resp.head = head;
     return resp;
+}
+
+int isValidRequest(Request *req) {
+    // TODO eventually add more checks here (for required header fields, ...)
+    return (req->version == VERSION_HTTP10 || req->version == VERSION_HTTP11) &&
+           (req->method == METHOD_GET || req->method == METHOD_POST || req->method == METHOD_PUT ||
+            req->method == METHOD_DELETE || req->method == METHOD_HEAD || req->method == METHOD_OPTIONS ||
+            req->method == METHOD_TRACE || req->method == METHOD_CONNECT);
 }

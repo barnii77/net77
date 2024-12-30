@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include <memory.h>
 #include <stdlib.h>
 #include "net77/net_includes.h"
@@ -6,6 +5,8 @@
 #include "net77/serde.h"
 #include "net77/thread_includes.h"
 #include "net77/mcfss.h"
+#include "net77/utils.h"
+#include "net77/logging.h"
 
 // TODO support HTTP/1.1's keep-alive connections: session support (so connections aren't immediately closed)
 
@@ -13,14 +14,16 @@ typedef struct RunServerArgs {
     ThreadPool *thread_pool;
     void *handler_data;
     const char *host;
+    ssize_t recv_timeout_usec;
+    size_t max_request_size;
+    ssize_t connection_timeout_usec;
+    const UnsafeSignal *server_killed;
+    UnsafeSignal *kill_ack;
+    UnsafeSignal *has_started_signal;
     int port;
     int max_concurrent_connections;
     int server_buf_size;
-    ssize_t request_timeout_usec;
-    size_t max_request_size;
-    ssize_t connection_timeout_usec;
-    const int *server_killed;
-    int *kill_ack;
+    int enable_delaying_sockets;
 } RunServerArgs;
 
 void threadStartServer(void *run_server_args) {
@@ -31,20 +34,24 @@ void threadStartServer(void *run_server_args) {
     int port = args->port;
     int max_concurrent_connections = args->max_concurrent_connections;
     int server_buf_size = args->server_buf_size;
-    ssize_t request_timeout_usec = args->request_timeout_usec;
+    ssize_t recv_timeout_usec = args->recv_timeout_usec;
     size_t max_request_size = args->max_request_size;
     ssize_t connection_timeout_usec = args->connection_timeout_usec;
-    const int *server_killed = args->server_killed;
-    int *kill_ack = args->kill_ack;
+    const UnsafeSignal *server_killed = args->server_killed;
+    UnsafeSignal *kill_ack = args->kill_ack;
+    UnsafeSignal *has_started_signal = args->has_started_signal;
+    int enable_delaying_sockets = args->enable_delaying_sockets;
     free(run_server_args);
-    runServer(thread_pool, handler_data, host, port, max_concurrent_connections, server_buf_size, request_timeout_usec,
-              max_request_size, connection_timeout_usec, server_killed, kill_ack);
+    if (has_started_signal)
+        *has_started_signal = 1;
+    runServer(thread_pool, handler_data, host, port, max_concurrent_connections, server_buf_size, recv_timeout_usec,
+              max_request_size, connection_timeout_usec, server_killed, kill_ack, enable_delaying_sockets);
 }
 
 size_t launchServerOnThread(ThreadPool *thread_pool, void *handler_data, const char *host,
-                            int port, int max_concurrent_connections, int server_buf_size, ssize_t request_timeout_usec,
-                            size_t max_request_size, ssize_t connection_timeout_usec, const int *server_killed,
-                            int *kill_ack) {
+                            int port, int max_concurrent_connections, int server_buf_size, ssize_t recv_timeout_usec,
+                            size_t max_request_size, ssize_t connection_timeout_usec, const UnsafeSignal *server_killed,
+                            UnsafeSignal *kill_ack, int enable_delaying_sockets, UnsafeSignal *has_started_signal) {
     RunServerArgs *args = malloc(sizeof(RunServerArgs));
     args->thread_pool = thread_pool;
     args->handler_data = handler_data;
@@ -52,11 +59,13 @@ size_t launchServerOnThread(ThreadPool *thread_pool, void *handler_data, const c
     args->port = port;
     args->max_concurrent_connections = max_concurrent_connections;
     args->server_buf_size = server_buf_size;
-    args->request_timeout_usec = request_timeout_usec;
+    args->recv_timeout_usec = recv_timeout_usec;
     args->max_request_size = max_request_size;
     args->connection_timeout_usec = connection_timeout_usec;
     args->server_killed = server_killed;
     args->kill_ack = kill_ack;
+    args->has_started_signal = has_started_signal;
+    args->enable_delaying_sockets = enable_delaying_sockets;
     return threadCreate(threadStartServer, args);
 }
 
@@ -144,7 +153,7 @@ int runServer(ServerHandler handler, void *handler_data, const char *host,
         ssize_t read_chars;
         int failed = 0;
         do {
-            if ((read_chars = recv(new_socket, buffer, server_buf_size)) < 0) {
+            if ((read_chars = recv(new_socket, buffer, server_buf_size, 0)) < 0) {
                 failed = 1;
                 break;
             }
@@ -168,27 +177,9 @@ int runServer(ServerHandler handler, void *handler_data, const char *host,
 
 #else
 
-#include <fcntl.h>
-#include <sys/time.h>
-
-static size_t getTimeInUSecs() {
-    struct timeval time;
-    gettimeofday(&time, NULL);
-    return (size_t) (time.tv_sec) * 1000000 + (size_t) (time.tv_usec);
-}
-
-static int makeNonBlocking(int fd) {
-    int flags, fco;
-    if ((flags = fcntl(fd, F_GETFL, 0)) < 0)
-        return flags;
-    if ((fco = fcntl(fd, F_SETFL, flags | O_NONBLOCK)) < 0)
-        return fco;
-    return 0;
-}
-
 int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int port, int max_concurrent_connections,
-              int server_buf_size, ssize_t request_timeout_usec, size_t max_request_size,
-              ssize_t connection_timeout_usec, const int *server_killed, int *kill_ack) {
+              int server_buf_size, ssize_t recv_timeout_usec, size_t max_request_size, ssize_t connection_timeout_usec,
+              const UnsafeSignal *server_killed, UnsafeSignal *kill_ack, int enable_delaying_sockets) {
     if (max_concurrent_connections < 0)
         max_concurrent_connections = DEFAULT_MAX_ACCEPTED_CONNECTIONS;
     if (server_buf_size < 0)
@@ -219,8 +210,9 @@ int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int
 
         // set socket options
         int opt = 1;
-        if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))
-            || makeNonBlocking(server_fd)) {
+        if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))
+            || setsockopt(server_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt))
+            || makeSocketNonBlocking(server_fd)) {
             close(server_fd);
             continue;
         }
@@ -247,9 +239,13 @@ int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int
     struct sockaddr_storage client_addr;
     socklen_t addrlen = sizeof(client_addr);
 
+    // allocate buffer for receiving data
     char *buffer = malloc(server_buf_size);
     if (!buffer)
         return 1;
+
+    // create "multi-category fixed-size set" for storing pollfds and last usage times in semantically joint, but
+    // physically separate arrays
     size_t item_sizes[2] = {sizeof(struct pollfd), sizeof(size_t)};
     MultiCategoryFixedSizeSet timed_conn_pollfds = newMcfsSet(max_concurrent_connections, item_sizes, 2);
     if (!timed_conn_pollfds.data[0])
@@ -257,10 +253,12 @@ int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int
     ConnState conn_state = {.stop_server = 0, .discard_conn = 0};
 
     while (!conn_state.stop_server && !*server_killed) {
+        // accept new connections
         int new_socket;
-        if (timed_conn_pollfds.len < timed_conn_pollfds.cap &&
-            (new_socket = accept(server_fd, (struct sockaddr *) &client_addr, &addrlen)) >= 0) {
-            if (setSendRecvTimeout(new_socket, request_timeout_usec)) {
+        while (timed_conn_pollfds.len < timed_conn_pollfds.cap
+               && (new_socket = accept(server_fd, (struct sockaddr *) &client_addr, &addrlen)) >= 0) {
+            if (makeSocketNonBlocking(new_socket)
+                || enable_delaying_sockets ? 0 : setSocketNoDelay(new_socket)) {
                 close(new_socket);
             } else {
                 struct pollfd pfd;
@@ -274,8 +272,7 @@ int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int
             }
         }
 
-        // TODO I think I could use poll_ret in the loop to shortcut the rest of the connections if the num connections which had an event is equal to poll_ret
-        // but I will have to make sure I actually can
+        // poll for incoming data
         int poll_ret = poll((struct pollfd *) timed_conn_pollfds.data[0], timed_conn_pollfds.len, 0);
         if (poll_ret > 0) {
             struct pollfd *end = ((struct pollfd *) timed_conn_pollfds.data[0]) + timed_conn_pollfds.len;
@@ -285,23 +282,15 @@ int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int
 
                 if (pfd->revents & POLLIN) {
                     StringBuilder builder = newStringBuilder(server_buf_size);
-                    ssize_t read_chars;
-                    int failed = 0;
-                    for (;;) {
-                        if ((read_chars = recv(fd, buffer, server_buf_size)) <= 0)
-                            break;
-                        stringBuilderAppend(&builder, buffer, read_chars);
-                        if (builder.len > max_request_size) {
-                            // discard request (too big)
-                            failed = 1;
-                            break;
-                        }
-                    }
+                    size_t ssize_t_max = 0x7FFFFFFFFFFFFFFF;
+                    ssize_t max_req_size = (ssize_t) (max_request_size > ssize_t_max ? ssize_t_max : max_request_size);
+                    int err = recvAllDataSb(fd, &builder, max_req_size, recv_timeout_usec, server_buf_size);
+                    LOG_MSG("runServer received data from fd %d\n", fd);
 
                     // connection was closed
-                    if (read_chars == 0 || failed) {
+                    if (builder.len == 0 || err) {
                         pfd->revents = 0;
-                        if (!mcfsSetRemove(&timed_conn_pollfds, (const char *) pfd, 0))
+                        if (!mcfsSetRemove(&timed_conn_pollfds, (const char *) pfd, 0) && err > 0)
                             close(fd);
                         conn_was_closed = 1;
                     } else {
@@ -312,7 +301,9 @@ int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int
                     }
 
                     // poll will trigger a POLLIN event where recv will just return 0 instantly if connection is closed
-                    if (failed || (builder.len == 0 && conn_was_closed)) {
+                    if (err || (builder.len == 0 && conn_was_closed)) {
+                        if (!err && conn_was_closed)
+                            LOG_MSG("runServer received data, but connection was closed before it could respond.\n");
                         stringBuilderDestroy(&builder);
                     } else {
                         String str = stringBuilderBuildAndDestroy(&builder);
@@ -372,6 +363,7 @@ int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int
             }
         }
 
+        // check for connection timeouts
         if (connection_timeout_usec >= 0) {
             size_t time_now = getTimeInUSecs();
             for (int i = 0; i < timed_conn_pollfds.len; i++) {
@@ -386,6 +378,10 @@ int runServer(ThreadPool *thread_pool, void *handler_data, const char *host, int
                 }
             }
         }
+
+        // if no events were triggered, yield the CPU
+        if (poll_ret <= 0)
+            schedYield();
     }
 
     free(buffer);

@@ -1,0 +1,4 @@
+./scripts/tiny_tcp_client
+./scripts/tiny_tcp_server
+./cmake-build-debug
+./cmake-build-release

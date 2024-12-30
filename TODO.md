@@ -1,1 +1,12 @@
-- proper error codes (not just 0, 1, -1 but actual error enums)
+- [X] HTTP 1.0 support
+- [X] basic TCP client/server implementation
+- [X] functions for basic HTTP 1.0 requests (can communicate with actual websites)
+- [ ] more flexible TCP server implementation
+- [ ] HTTP 1.1 support
+- [ ] HTTP 2.0 support
+- [ ] HTTP 3.0 support
+- [ ] TLS 1.2 support (custom TLS implementation)
+- [ ] TLS 1.3 support (custom TLS implementation)
+- [ ] TLS session resumption
+- [ ] HTTPS support
+- [ ] proper error codes (not just 0, 1, -1 but actual error enums)

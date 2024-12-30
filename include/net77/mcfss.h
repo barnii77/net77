@@ -3,6 +3,21 @@
 
 #include <stddef.h>
 
+/**
+ * A special data structure that allows conveniently decomposing an array of structs into a struct of arrays.
+ * Specifically, this type represents a set, meaning conceptually, it does not care about in-memory item ordering.
+ * This type is useful for when you really would want things to be grouped into a struct and managed as one piece,
+ * but this is simply not possible because you need multiple arrays where the data that belongs together has the same
+ * index in their respective arrays. In such cases, the MultiCategoryFixedSizeSet allows for joint management of the
+ * associated items. \n For example: \n
+ * ```c \n
+ * struct pollfds pfds[] = {pfd1, pfd2, pfd3}; \n
+ * int pfd_time_to_live[] = {99, 42, 69}; \n
+ * ``` \n
+ * You have two arrays where items at the same index i in those arrays belong together conceptually, e.g. 42 is the time
+ * to live of pfd2. With this type, you can add, remove and modify these pairs almost as if they were packed into a
+ * struct, while still having them separated into different arrays in-memory.
+ */
 typedef struct MultiCategoryFixedSizeSet {
     // category data (pointer to char arrays): char[n_categories][cap]
     char **data;

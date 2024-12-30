@@ -5,13 +5,18 @@
 
 #include <windows.h>
 
-// TODO Mutex
+// TODO Mutex and cond
 
 #else
 
 #include <pthread.h>
 
 typedef pthread_mutex_t Mutex;
+
+typedef struct {
+    Mutex mutex;
+    pthread_cond_t cond;
+} Cond;
 
 #endif
 
@@ -28,5 +33,15 @@ void mutexLock(Mutex *mutex);
 void mutexUnlock(Mutex *mutex);
 
 void mutexDestroy(Mutex *mutex);
+
+Cond newCond();
+
+void condLockAndWait(Cond *cond);
+
+void condUnlock(Cond *cond);
+
+void condSignal(Cond *cond);
+
+void condDestroy(Cond *cond);
 
 #endif

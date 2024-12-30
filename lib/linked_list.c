@@ -32,6 +32,18 @@ void linkedListDestroy(LinkedList *list) {
     list->end = NULL;
 }
 
+size_t linkedListLen(LinkedList *list) {
+    if (!list)
+        return 0;
+    mutexLock(&list->mutex);
+    size_t len = 0;
+    for (DataOwningLinkedListNode *node = list->start; node != NULL; node = node->next) {
+        len++;
+    }
+    mutexUnlock(&list->mutex);
+    return len;
+}
+
 void linkedListPushBack(LinkedList *list, void *data) {
     mutexLock(&list->mutex);
     if (!list->start || !list->end) {

@@ -73,4 +73,33 @@ void mutexDestroy(Mutex *mutex) {
     pthread_mutex_destroy(mutex);
 }
 
+Cond newCond() {
+    Mutex m = newMutex();
+    pthread_cond_t cond;
+    pthread_cond_init(&cond, NULL);
+    return (Cond){m, cond};
+}
+
+void condWait(Cond *cond) {
+    pthread_cond_wait(&cond->cond, &cond->mutex);
+}
+
+void condLockAndWait(Cond *cond) {
+    mutexLock(&cond->mutex);
+    condWait(cond);
+}
+
+void condUnlock(Cond *cond) {
+    mutexUnlock(&cond->mutex);
+}
+
+void condSignal(Cond *cond) {
+    pthread_cond_signal(&cond->cond);
+}
+
+void condDestroy(Cond *cond) {
+    mutexDestroy(&cond->mutex);
+    pthread_cond_destroy(&cond->cond);
+}
+
 #endif

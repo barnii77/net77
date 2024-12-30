@@ -1,7 +1,7 @@
 #ifndef NET77_LINKED_LIST_H
 #define NET77_LINKED_LIST_H
 
-#include "thread_includes.h"
+#include "net77/thread_includes.h"
 
 /**
  * A node in a linked list that *takes ownership of the data*
@@ -27,6 +27,11 @@ typedef struct LinkedListHead {
 LinkedList newLinkedList();
 
 void linkedListDestroy(LinkedList *list);
+
+/**
+ * Returns the length of the linked list (or 0 if the list is NULL)
+ */
+size_t linkedListLen(LinkedList *list);
 
 /**
  * Pushes to the end of the linked list and *takes ownership of the data*

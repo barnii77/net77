@@ -1,4 +1,3 @@
-#include <assert.h>
 #include "net77/serde.h"
 
 #define BUBBLE_UP_ERR(err) if (err) return 1
@@ -13,6 +12,18 @@ int serializeMethod(Method method, StringBuilder *builder) {
         STRING_BUILDER_APPEND_CONST_SIZED(builder, "HEAD");
     } else if (method == METHOD_POST) {
         STRING_BUILDER_APPEND_CONST_SIZED(builder, "POST");
+    } else if (method == METHOD_PUT) {
+        STRING_BUILDER_APPEND_CONST_SIZED(builder, "PUT");
+    } else if (method == METHOD_DELETE) {
+        STRING_BUILDER_APPEND_CONST_SIZED(builder, "DELETE");
+    } else if (method == METHOD_CONNECT) {
+        STRING_BUILDER_APPEND_CONST_SIZED(builder, "CONNECT");
+    } else if (method == METHOD_OPTIONS) {
+        STRING_BUILDER_APPEND_CONST_SIZED(builder, "OPTIONS");
+    } else if (method == METHOD_TRACE) {
+        STRING_BUILDER_APPEND_CONST_SIZED(builder, "TRACE");
+    } else if (method == METHOD_PATCH) {
+        STRING_BUILDER_APPEND_CONST_SIZED(builder, "PATCH");
     } else {
         return 1;
     }

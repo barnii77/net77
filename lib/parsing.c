@@ -97,6 +97,18 @@ int parseMethod(StringRef *str, Method *method) {
         *method = METHOD_POST;
     } else if (STR_EQ_LITERAL(ms.data, "HEAD")) {
         *method = METHOD_HEAD;
+    } else if (STR_EQ_LITERAL(ms.data, "PUT")) {
+        *method = METHOD_PUT;
+    } else if (STR_EQ_LITERAL(ms.data, "DELETE")) {
+        *method = METHOD_DELETE;
+    } else if (STR_EQ_LITERAL(ms.data, "CONNECT")) {
+        *method = METHOD_CONNECT;
+    } else if (STR_EQ_LITERAL(ms.data, "OPTIONS")) {
+        *method = METHOD_OPTIONS;
+    } else if (STR_EQ_LITERAL(ms.data, "TRACE")) {
+        *method = METHOD_TRACE;
+    } else if (STR_EQ_LITERAL(ms.data, "PATCH")) {
+        *method = METHOD_PATCH;
     } else {
         return 1;
     }
