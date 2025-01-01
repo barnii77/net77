@@ -104,7 +104,7 @@ int test##name_suffix(void) { \
     const long long connection_timeout_usec = connection_timeout; \
     UnsafeSignal server_killed = 0, kill_ack = 0, server_has_started = 0; \
     if (run_server_at_all) { \
-        size_t thread = launchServerOnThread(&thread_pool, NULL, host, port, 2, -1, 50000, 128, connection_timeout_usec, &server_killed, &kill_ack, 0, &server_has_started); \
+        size_t thread = launchServerOnThread(NULL, &thread_pool, host, port, 2, 2, -1, 50000, 128, connection_timeout_usec, &server_killed, &kill_ack, 0, NULL, &server_has_started); \
         if (thread == -1) \
             return -0xBAD; \
         while (!server_has_started);  /* wait for server to start */ \
@@ -126,7 +126,7 @@ int test##name_suffix(void) { \
     return else_ret; \
 }
 
-const int test_server_n_msg_reps = 10000;
+const int test_server_n_msg_reps = 100000;
 
 void testServerHandlerBigData(void *server_handler_args) {
     LOG_MSG("called testServerHandlerBigData at %zd\n", getTimeInUSecs() / 1000);
@@ -157,16 +157,17 @@ void testServerHandlerBigData(void *server_handler_args) {
 
 int testServerBigData1(void) {
     const int n_msg_reps = test_server_n_msg_reps;
-    const size_t max_req_size = 99999999999;
+    const size_t max_req_size = 999999999;
     const char *host = "127.0.0.1";
     const int port = 54321;
     ThreadPool thread_pool = newThreadPool(0, testServerHandlerBigData);
     const long long connection_timeout_usec = 1000000000;
-    const long long client_conn_timeout_usec = 1000000;
-    const long long recv_timeout_usec = 1;
+    const long long client_conn_timeout_usec = 100000;
+    const long long recv_timeout_usec = 10000;
     UnsafeSignal server_killed = 0, kill_ack = 0, server_has_started = 0;
-    size_t thread = launchServerOnThread(&thread_pool, NULL, host, port, 2, -1, recv_timeout_usec, max_req_size,
-                                         connection_timeout_usec, &server_killed, &kill_ack, 0, &server_has_started);
+    size_t thread = launchServerOnThread(NULL, &thread_pool, host, port, 2, 2, -1, recv_timeout_usec, max_req_size,
+                                         connection_timeout_usec, &server_killed, &kill_ack, 0, NULL,
+                                         &server_has_started);
     if (thread == -1)
         return -1;
     while (!server_has_started);  // wait for server to start
@@ -190,11 +191,13 @@ int testServerBigData1(void) {
             break;
         }
     }
+    if (out.len != 4 * n_msg_reps)
+        printAndFlush("\nTHE RECEIVED DATA HAS LENGTH %zu, BUT SHOULD HAVE %d\n", out.len, 4 * n_msg_reps);
     freeString(&out);
     free(msg);
     if (all_strcmp)
         return 0;
-    return 69;
+    return 42;
 }
 
 MAKE_PARSE_TEST(REQ_TEST1, Request, ParseReq1, 1);
@@ -219,16 +222,16 @@ MAKE_RAW_REQUEST_TEST(GET_REQ_TEST1, "http://www.example.com", 80, GET_REQ_TARGE
 
 MAKE_RAW_REQUEST_TEST(GET_REQ_TEST1, "https://www.example.com", 80, GET_REQ_TARGET1, GetReq1UrlPrefix2);
 
-MAKE_SERVER_TEST(10000, 4, 0, 69, 0xDEAD, 1, Server1);
+MAKE_SERVER_TEST(10000, 4, 0, 42, 0xDEAD, 1, Server1);
 
-MAKE_SERVER_TEST(10000, 0, 0, 69, 0xDEAD, 1, SingleThreadedServer1);
+MAKE_SERVER_TEST(10000, 0, 0, 99, 0xDEAD, 1, SingleThreadedServer1);
 
-MAKE_SERVER_TEST(0, 4, 69, 42, 0, 0, ShouldTimeoutServer1);
+MAKE_SERVER_TEST(0, 4, 99, 42, 0, 0, ShouldTimeoutServer1);
 
 int print_on_pass = 1;
 int print_pre_run_msg = 0;
 int run_all_tests = 1;
-int n_test_reps = 1;
+int n_test_reps = 1;//000;
 const char *selected_test = "testServerBigData1";
 
 #define REGISTER_TEST_CASE(test_name) \
@@ -295,7 +298,7 @@ int main(void) {
         else if (n_test_reps > 1) printAndFlush("%d/%d tests failed this iteration!\n", n_failed, n_tests);
     }
     if (tests_always_passed) printAndFlush("*** ALL TESTS PASSED EVERY SINGLE TIME! ***\n")
-    else printAndFlush("*** %d/%d TESTS FAILED OVERALL! ***\n", n_total_failed, n_tests * n_test_reps);
+    else printAndFlush("*** %d/%d TESTS FAILED OVERALL! ***\n", n_total_failed, n_test_reps * (run_all_tests ? n_tests : 1));
     socketCleanup();
     return 0;
 }

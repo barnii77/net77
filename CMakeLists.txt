@@ -19,6 +19,7 @@ set(NET77_SOURCES
         lib/mcfss.c
         lib/linked_list.c
         lib/thread_pool.c
+        lib/string_utils.c
         include/net77/request.h
         include/net77/string_utils.h
         include/net77/utils.h

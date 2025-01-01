@@ -1,12 +1,19 @@
 - [X] HTTP 1.0 support
 - [X] basic TCP client/server implementation
 - [X] functions for basic HTTP 1.0 requests (can communicate with actual websites)
-- [ ] more flexible TCP server implementation
+- [X] more flexible TCP server implementation
+- [X] ErrStatus and SuccessStatus typedefs (they're ints) with macros ecIsErr, ecIsOk, scIsOk, scIsErr to encode whether 0 is no error and 1 is error or 1 is success and 0 no success...
+- [ ] Make everything more stable (some of the tests don't always pass if you run them 1000 times)
+  - [ ] testServerBigData1 seems to sometimes fail if I turn up the size of the messages enough AND run it very often in a loop with no pause in between
+  - [ ] the tests which make real requests to www.example.com seem to be unable to connect sometimes (but only if I run all the other tests as well....)
 - [ ] HTTP 1.1 support
 - [ ] HTTP 2.0 support
-- [ ] HTTP 3.0 support
+- [ ] Some utilities for hosting HTTP/S servers (i.e. a tcp server handler wrapper)
+- [ ] ALPN (application layer protocol negotiation)
 - [ ] TLS 1.2 support (custom TLS implementation)
 - [ ] TLS 1.3 support (custom TLS implementation)
 - [ ] TLS session resumption
 - [ ] HTTPS support
 - [ ] proper error codes (not just 0, 1, -1 but actual error enums)
+- [ ] HTTP 3.0 support
+  - [ ] QUIC support

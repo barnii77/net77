@@ -42,12 +42,12 @@ StringRef charPtrToStringRef(const char *data);
 size_t getTimeInUSecs();
 
 /// Cross-platform way to make a file descriptor non-delaying (deactivate Nagle's algorithm to reduce latency)
-int setSocketNoDelay(size_t fd);
+ErrorStatus setSocketNoDelay(size_t fd);
 
 /// Cross-platform way to make a file descriptor non-blocking (recv and sendAllData will return immediately)
-int makeSocketNonBlocking(size_t fd);
+ErrorStatus makeSocketNonBlocking(size_t fd);
 
-/// Cross-platform way to yield the CPU to another thread to avoid busy waiting
+/// Cross-platform way to yield the CPU to another thread to avoid busy waiting. Does not guarantee yielding.
 void schedYield();
 
 #endif

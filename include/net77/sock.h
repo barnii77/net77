@@ -2,8 +2,8 @@
 #define NET77_SOCK_H
 
 #include "net77/string_utils.h"
+#include "net77/error_utils.h"
 
-// TODO handle SIGPIPE and return an error if it is received (ec = -1)
 // TODO I should return some more detailed error codes (eg to tell caller whether server failed to respond or client failed to connect, etc)
 /**
  * open a socket, connect to the host, sendAllData the data, receive response and close the socket
@@ -22,7 +22,7 @@
  * returns an error
  * @return err (0 means success)
  */
-int newSocketSendReceiveClose(const char *host, int port, StringRef data, String *out, int client_buf_size,
+ErrorStatus newSocketSendReceiveClose(const char *host, int port, StringRef data, String *out, int client_buf_size,
                               ssize_t server_connect_timeout_usec, ssize_t server_response_timeout_usec,
                               size_t max_response_size, ssize_t response_done_timeout_usec,
                               int enable_delaying_sockets);

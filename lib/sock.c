@@ -95,10 +95,10 @@ int newSocketSendReceiveClose(const char *host, int port, StringRef data, String
 
 #else
 
-int newSocketSendReceiveClose(const char *host, int port, StringRef data, String *out, int client_buf_size,
-                              ssize_t server_connect_timeout_usec, ssize_t server_response_timeout_usec,
-                              size_t max_response_size, ssize_t response_done_timeout_usec,
-                              int enable_delaying_sockets) {
+ErrorStatus newSocketSendReceiveClose(const char *host, int port, StringRef data, String *out, int client_buf_size,
+                                      ssize_t server_connect_timeout_usec, ssize_t server_response_timeout_usec,
+                                      size_t max_response_size, ssize_t response_done_timeout_usec,
+                                      int enable_delaying_sockets) {
     LOG_MSG("called newSocketSendRecvClose at %zd\n", getTimeInUSecs() / 1000);
     if (client_buf_size < 0)
         client_buf_size = DEFAULT_CLIENT_BUF_SIZE;

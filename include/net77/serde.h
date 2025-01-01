@@ -3,8 +3,10 @@
 
 #include <stddef.h>
 #include "net77/string_utils.h"
+#include "net77/error_utils.h"
 
 typedef enum Version {
+    VERSION_HTTP09,
     VERSION_HTTP10,
     VERSION_HTTP11,
 } Version;
@@ -66,13 +68,13 @@ typedef struct Response {
 
 int isValidRequest(Request *req);
 
-int parseRequest(StringRef str, Request *req, int parse_header_into_structs);
+ErrorStatus parseRequest(StringRef str, Request *req, int parse_header_into_structs);
 
-int parseResponse(StringRef str, Response *resp, int parse_header_into_structs);
+ErrorStatus parseResponse(StringRef str, Response *resp, int parse_header_into_structs);
 
-int serializeRequest(Request *req, StringBuilder *builder);
+ErrorStatus serializeRequest(Request *req, StringBuilder *builder);
 
-int serializeResponse(Response *resp, StringBuilder *builder);
+ErrorStatus serializeResponse(Response *resp, StringBuilder *builder);
 
 void freeRequest(Request *req);
 

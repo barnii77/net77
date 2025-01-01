@@ -5,7 +5,7 @@
 // append a literal whose size is known at compile time
 #define STRING_BUILDER_APPEND_CONST_SIZED(builder, literal) stringBuilderAppend(builder, literal, sizeof(literal) - 1)
 
-int serializeMethod(Method method, StringBuilder *builder) {
+ErrorStatus serializeMethod(Method method, StringBuilder *builder) {
     if (method == METHOD_GET) {
         STRING_BUILDER_APPEND_CONST_SIZED(builder, "GET");
     } else if (method == METHOD_HEAD) {
@@ -30,13 +30,15 @@ int serializeMethod(Method method, StringBuilder *builder) {
     return 0;
 }
 
-int serializeURL(StringRef url, StringBuilder *builder) {
+ErrorStatus serializeURL(StringRef url, StringBuilder *builder) {
     stringBuilderAppend(builder, url.data, url.len);
     return 0;
 }
 
-int serializeHTTPVersion(Version v, StringBuilder *builder) {
-    if (v == VERSION_HTTP10) {
+ErrorStatus serializeHTTPVersion(Version v, StringBuilder *builder) {
+    if (v == VERSION_HTTP09) {
+        STRING_BUILDER_APPEND_CONST_SIZED(builder, "HTTP/0.9");
+    } else if (v == VERSION_HTTP10) {
         STRING_BUILDER_APPEND_CONST_SIZED(builder, "HTTP/1.0");
     } else if (v == VERSION_HTTP11) {
         STRING_BUILDER_APPEND_CONST_SIZED(builder, "HTTP/1.1");
@@ -46,7 +48,7 @@ int serializeHTTPVersion(Version v, StringBuilder *builder) {
     return 0;
 }
 
-int serializeStatusCode(int status_code, StringBuilder *builder) {
+ErrorStatus serializeStatusCode(int status_code, StringBuilder *builder) {
     char status_code_str[] = "\0\0\0";
     for (int i = 0; i < sizeof(status_code_str) - 1; i++) {
         status_code_str[sizeof(status_code_str) - 2 - i] = (char)(status_code % 10 + '0');
@@ -56,7 +58,7 @@ int serializeStatusCode(int status_code, StringBuilder *builder) {
     return 0;
 }
 
-int serializeHeader(Header *head, StringBuilder *builder) {
+ErrorStatus serializeHeader(Header *head, StringBuilder *builder) {
     if (head->type == HEADER_AS_STRUCT) {
         for (int i = 0; i < head->data.structure.count; i++) {
             HeaderField f = head->data.structure.fields[i];
@@ -73,7 +75,7 @@ int serializeHeader(Header *head, StringBuilder *builder) {
     return 0;
 }
 
-int serializeRequest(Request *req, StringBuilder *builder) {
+ErrorStatus serializeRequest(Request *req, StringBuilder *builder) {
     BUBBLE_UP_ERR(serializeMethod(req->method, builder));
     STRING_BUILDER_APPEND_CONST_SIZED(builder, " ");
     BUBBLE_UP_ERR(serializeURL(req->url, builder));
@@ -87,7 +89,7 @@ int serializeRequest(Request *req, StringBuilder *builder) {
     return 0;
 }
 
-int serializeResponse(Response *resp, StringBuilder *builder) {
+ErrorStatus serializeResponse(Response *resp, StringBuilder *builder) {
     BUBBLE_UP_ERR(serializeHTTPVersion(resp->version, builder));
     STRING_BUILDER_APPEND_CONST_SIZED(builder, " ");
     BUBBLE_UP_ERR(serializeStatusCode(resp->status_code, builder));

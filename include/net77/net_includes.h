@@ -5,8 +5,9 @@
 #include "net77/init.h"
 #include "net77/int_includes.h"
 #include "net77/string_utils.h"
+#include "net77/error_utils.h"
 
-int setSendRecvTimeout(size_t fd, ssize_t timeout_usec);
+ErrorStatus setSendRecvTimeout(size_t fd, ssize_t timeout_usec);
 
 /**
  * @param socket_fd the socket file descriptor
@@ -15,7 +16,7 @@ int setSendRecvTimeout(size_t fd, ssize_t timeout_usec);
  * @param timeout_usec the timeout in microseconds
  * @return 0 on success, x != 0 on error: returns 1 on normal error and -1 on error that lead to the socket being closed.
  */
-int sendAllData(size_t socket_fd, const char *buf, size_t len, ssize_t timeout_usec);
+ErrorStatus sendAllData(size_t socket_fd, const char *buf, size_t len, ssize_t timeout_usec);
 
 /**
  * @param socket_fd the socket file descriptor
@@ -25,7 +26,7 @@ int sendAllData(size_t socket_fd, const char *buf, size_t len, ssize_t timeout_u
  * @param out_bytes_received if not NULL, will be set to the number of bytes received
  * @return 0 on success, x != 0 on error: returns 1 on normal error and -1 on error that lead to the socket being closed.
  */
-int recvAllData(size_t socket_fd, char *buf, size_t len, ssize_t timeout_usec, size_t *out_bytes_received);
+ErrorStatus recvAllData(size_t socket_fd, char *buf, size_t len, ssize_t timeout_usec, size_t *out_bytes_received);
 
 /**
  * @param socket_fd the socket file descriptor
@@ -38,7 +39,7 @@ int recvAllData(size_t socket_fd, char *buf, size_t len, ssize_t timeout_usec, s
  * @return 0 on success, x != 0 on error: returns 1 on normal error and -1 on error that lead to the socket being closed.
  * @note It is the callers responsibility to free the StringBuilder
  */
-int recvAllDataSb(size_t socket_fd, StringBuilder *builder, ssize_t max_len, ssize_t timeout_usec, ssize_t sb_min_cap);
+ErrorStatus recvAllDataSb(size_t socket_fd, StringBuilder *builder, ssize_t max_len, ssize_t timeout_usec, ssize_t sb_min_cap);
 
 #if defined(_WIN32) || defined(_WIN64)
 // Include Windows-specific headers

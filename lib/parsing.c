@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "net77/serde.h"
+#include "net77/error_utils.h"
 
 #define STR_EQ_LITERAL(expr, literal) (!strncmp((expr), (literal), sizeof(literal) - 1))
 
@@ -89,7 +90,7 @@ StringRef parseNumber(StringRef *str) {
     return out;
 }
 
-int parseMethod(StringRef *str, Method *method) {
+ErrorStatus parseMethod(StringRef *str, Method *method) {
     StringRef ms = parseWord(str);
     if (STR_EQ_LITERAL(ms.data, "GET")) {
         *method = METHOD_GET;
@@ -115,7 +116,7 @@ int parseMethod(StringRef *str, Method *method) {
     return 0;
 }
 
-int parseURL(StringRef *str, StringRef *url) {
+ErrorStatus parseURL(StringRef *str, StringRef *url) {
     int i;
     for (i = 0; i < str->len; i++) {
         if (str->data[i] == ' ') {
@@ -129,7 +130,7 @@ int parseURL(StringRef *str, StringRef *url) {
     return i == 0;
 }
 
-int parseVersion(StringRef *str, Version *v) {
+ErrorStatus parseVersion(StringRef *str, Version *v) {
     StringRef http = parseWord(str);
     if (!STR_LOWER_EQ_LITERAL(http.data, "http"))
         return 1;
@@ -145,7 +146,7 @@ int parseVersion(StringRef *str, Version *v) {
     int min = minor.data[0] - '0';
 
     if (maj == 0)
-        *v = VERSION_HTTP10;  // use oldest supported version
+        *v = VERSION_HTTP09;  // use oldest supported version
     else if (maj == 1)
         *v = min == 0 ? VERSION_HTTP10 : VERSION_HTTP11;
     else
@@ -154,7 +155,7 @@ int parseVersion(StringRef *str, Version *v) {
     return 0;
 }
 
-int parseHeaderField(StringRef *str, HeaderField *h) {
+ErrorStatus parseHeaderField(StringRef *str, HeaderField *h) {
     StringRef name = parseWord(str);
     BUBBLE_UP_ERR(expectChar(str, ':'));
     while (str->len > 0 && str->data[0] == ' ') {
@@ -176,7 +177,7 @@ int parseHeaderField(StringRef *str, HeaderField *h) {
     return 0;
 }
 
-int parseHeaderStruct(StringRef *str, HeaderStruct *hs) {
+ErrorStatus parseHeaderStruct(StringRef *str, HeaderStruct *hs) {
     int err, count = 0, last_was_nl = 0, is_beginning = 1;
     for (int i = 0; i < str->len - 1; i++) {
         if (str->data[i] == '\r' && str->data[i + 1] == '\n') {
@@ -218,7 +219,7 @@ int parseHeaderStruct(StringRef *str, HeaderStruct *hs) {
     return 0;
 }
 
-int parseHeaderString(StringRef *str, StringRef *h) {
+ErrorStatus parseHeaderString(StringRef *str, StringRef *h) {
     const char *start = str->data;
     int last_was_nl = 0, is_beginning = 0;
     for (;; str->data++, str->len--) {
@@ -250,7 +251,7 @@ int parseHeaderString(StringRef *str, StringRef *h) {
     return 0;
 }
 
-int parseHeader(StringRef *str, Header *head, int parse_header_into_structs) {
+ErrorStatus parseHeader(StringRef *str, Header *head, int parse_header_into_structs) {
     if (parse_header_into_structs) {
         head->type = HEADER_AS_STRUCT;
         HeaderStruct hs;
@@ -267,24 +268,39 @@ int parseHeader(StringRef *str, Header *head, int parse_header_into_structs) {
     return 0;
 }
 
-int parseBody(StringRef *str, StringRef *body) {
+ErrorStatus parseBody(StringRef *str, StringRef *body) {
     body->data = str->data;
     body->len = str->len;
     return 0;
 }
 
-int parseRequest(StringRef str, Request *req, int parse_header_into_structs) {
+ErrorStatus parseRequest(StringRef str, Request *req, int parse_header_into_structs) {
+    if (!str.len)
+        return 1;
+
     Method method;
-    BUBBLE_UP_ERR(parseMethod(&str, &method));
-    BUBBLE_UP_ERR(expectSpace(&str));
-
     StringRef url;
-    BUBBLE_UP_ERR(parseURL(&str, &url));
-    BUBBLE_UP_ERR(expectSpace(&str));
-
     Version version;
-    BUBBLE_UP_ERR(parseVersion(&str, &version));
-    BUBBLE_UP_ERR(expectNewline(&str));
+
+    if (str.data[0] == '/') {
+        // for backwards compatibility with HTTP 0.9, a request line containing only URI is allowed
+        method = METHOD_GET;
+        version = VERSION_HTTP09;
+        BUBBLE_UP_ERR(parseURL(&str, &url));
+        BUBBLE_UP_ERR(expectNewline(&str));
+    } else {
+        // parse method
+        BUBBLE_UP_ERR(parseMethod(&str, &method));
+        BUBBLE_UP_ERR(expectSpace(&str));
+
+        // parse uri
+        BUBBLE_UP_ERR(parseURL(&str, &url));
+        BUBBLE_UP_ERR(expectSpace(&str));
+
+        // parse version
+        BUBBLE_UP_ERR(parseVersion(&str, &version));
+        BUBBLE_UP_ERR(expectNewline(&str));
+    }
 
     Header head;
     BUBBLE_UP_ERR(parseHeader(&str, &head, parse_header_into_structs));
@@ -302,7 +318,7 @@ int parseRequest(StringRef str, Request *req, int parse_header_into_structs) {
     return 0;
 }
 
-int parseResponse(StringRef str, Response *resp, int parse_header_into_structs) {
+ErrorStatus parseResponse(StringRef str, Response *resp, int parse_header_into_structs) {
     Version version;
     BUBBLE_UP_ERR(parseVersion(&str, &version));
     BUBBLE_UP_ERR(expectSpace(&str));

@@ -38,4 +38,6 @@ String stringBuilderBuildAndDestroy(StringBuilder *builder);
 
 void stringBuilderDestroy(StringBuilder *builder);
 
+const char *findAsciiSubstringCaseInsensitive(const char *haystack, size_t haystack_len, const char *needle, size_t needle_len);
+
 #endif

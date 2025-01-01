@@ -4,6 +4,7 @@
 #include "net77/utils.h"
 #include "net77/logging.h"
 #include "net77/net_includes.h"
+#include "net77/error_utils.h"
 
 StringRef removeURLPrefix(StringRef url) {
     StringRef init = url;
@@ -56,7 +57,7 @@ size_t getTimeInUSecs() {
     return (size_t) (time.tv_sec) * 1000000 + (size_t) (time.tv_usec);
 }
 
-int makeSocketNonBlocking(size_t fd) {
+ErrorStatus makeSocketNonBlocking(size_t fd) {
     int flags, fco;
     int ifd = (int) fd;
     if ((flags = fcntl(ifd, F_GETFL, 0)) < 0)
@@ -66,13 +67,13 @@ int makeSocketNonBlocking(size_t fd) {
     return 0;
 }
 
-int setSocketNoDelay(size_t fd) {
+ErrorStatus setSocketNoDelay(size_t fd) {
     int opt = 1;
     int ifd = (int) fd;
     return setsockopt(ifd, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt));
 }
 
-int setSendRecvTimeout(size_t fd, ssize_t timeout_usec) {
+ErrorStatus setSendRecvTimeout(size_t fd, ssize_t timeout_usec) {
     if (timeout_usec >= 0) {
         struct timeval timeout;
         timeout.tv_sec = timeout_usec / 1000000;
@@ -84,7 +85,7 @@ int setSendRecvTimeout(size_t fd, ssize_t timeout_usec) {
     return 0;
 }
 
-int sendAllData(size_t socket_fd, const char *buf, size_t len, ssize_t timeout_usec) {
+ErrorStatus sendAllData(size_t socket_fd, const char *buf, size_t len, ssize_t timeout_usec) {
     LOG_MSG("called sendAllData at %zd\n", getTimeInUSecs() / 1000);
     int sockfd = (int) socket_fd;
     size_t bytes_sent = 0;
@@ -127,7 +128,7 @@ int sendAllData(size_t socket_fd, const char *buf, size_t len, ssize_t timeout_u
     return 0;
 }
 
-int recvAllData(size_t socket_fd, char *buf, size_t len, ssize_t timeout_usec, size_t *out_bytes_received) {
+ErrorStatus recvAllData(size_t socket_fd, char *buf, size_t len, ssize_t timeout_usec, size_t *out_bytes_received) {
     assert(buf);
     LOG_MSG("called recvAllData at %zd\n", getTimeInUSecs() / 1000);
     int sockfd = (int) socket_fd;
@@ -175,7 +176,7 @@ int recvAllData(size_t socket_fd, char *buf, size_t len, ssize_t timeout_usec, s
 
 #define DEFAULT_RECV_ALL_DATA_SB_MIN_CAP (1024)
 
-int recvAllDataSb(size_t socket_fd, StringBuilder *builder, ssize_t max_len, ssize_t timeout_usec, ssize_t sb_min_cap) {
+ErrorStatus recvAllDataSb(size_t socket_fd, StringBuilder *builder, ssize_t max_len, ssize_t timeout_usec, ssize_t sb_min_cap) {
     assert(builder);
     if (sb_min_cap < 0)
         sb_min_cap = DEFAULT_RECV_ALL_DATA_SB_MIN_CAP;

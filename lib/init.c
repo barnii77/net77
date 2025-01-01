@@ -1,7 +1,8 @@
 #include "net77/net_includes.h"
+#include "net77/error_utils.h"
 
 #if defined(_WIN32) || defined(_WIN64)
-int socketInit() {
+ErrorStatus socketInit() {
     WSADATA wsaData;
     return WSAStartup(MAKEWORD(2, 2), &wsaData);
 }
@@ -11,7 +12,7 @@ void socketCleanup() {
 }
 #else
 
-int socketInit() {
+ErrorStatus socketInit() {
     return 0;
 }
 

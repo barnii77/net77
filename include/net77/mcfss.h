@@ -12,7 +12,7 @@
  * associated items. \n For example: \n
  * ```c \n
  * struct pollfds pfds[] = {pfd1, pfd2, pfd3}; \n
- * int pfd_time_to_live[] = {99, 42, 69}; \n
+ * int pfd_time_to_live[] = {99, 42, 1337}; \n
  * ``` \n
  * You have two arrays where items at the same index i in those arrays belong together conceptually, e.g. 42 is the time
  * to live of pfd2. With this type, you can add, remove and modify these pairs almost as if they were packed into a
@@ -34,13 +34,13 @@ MultiCategoryFixedSizeSet newMcfsSet(size_t cap, size_t *item_sizes, size_t n_ca
 
 /**
  * Adds to a set.
- * returns: 0 if item was added or was already present, 1 if item couldn't be added because the capacity was already maxed out
+ * @return: 0 if item was added or was already present, 1 if item couldn't be added because the capacity was already maxed out
  */
 int mcfsSetAdd(MultiCategoryFixedSizeSet *set, const char **items, size_t exist_check_category);
 
 /**
  * Removes from a set.
- * returns: 0 if item was removed from set, 1 if it wasn't there in the first place
+ * @return: 0 if item was removed from set, 1 if it wasn't there in the first place
  */
 int mcfsSetRemove(MultiCategoryFixedSizeSet *set, const char *item, size_t item_category);
 
