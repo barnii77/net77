@@ -1,35 +1,6 @@
 #include <string.h>
-#include "net77/serde.h"
-#include "net77/request.h"
-#include "net77/sock.h"
 #include "net77/utils.h"
-#include "net77/int_includes.h"
-#include "net77/error_utils.h"
-
-#define BUBBLE_UP_ERR(err) if (err) return 1
-
-// after the initial response bytes are received, we wait for this many more microseconds for more response bytes
-#define REQUEST_RESPONSE_ACCUM_TIME_USEC 50000
-
-ErrorStatus
-request(const char *host, int port, Request *req, String *out, size_t max_response_size, ssize_t connect_timeout_usec,
-        ssize_t response_timeout_usec) {
-    StringBuilder builder = newStringBuilder(0);
-    BUBBLE_UP_ERR(serializeRequest(req, &builder));
-    String str = stringBuilderBuildAndDestroy(&builder);
-    StringRef str_ref = {str.len, str.data};
-    int err = newSocketSendReceiveClose(host, port, str_ref, out, -1, connect_timeout_usec, response_timeout_usec,
-                                        max_response_size, REQUEST_RESPONSE_ACCUM_TIME_USEC, 0);
-    if (!err)
-        freeString(&str);
-    return err;
-}
-
-ErrorStatus rawRequest(const char *host, int port, StringRef req, String *out, size_t max_response_size,
-                       ssize_t connect_timeout_usec, ssize_t response_timeout_usec) {
-    return newSocketSendReceiveClose(host, port, req, out, -1, connect_timeout_usec, response_timeout_usec,
-                                     max_response_size, REQUEST_RESPONSE_ACCUM_TIME_USEC, 0);
-}
+#include "net77/serde.h"
 
 RequestBuilder newRequestBuilder(Method method, StringRef url, Version version) {
     RequestBuilder out = {

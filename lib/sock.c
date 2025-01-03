@@ -5,6 +5,7 @@
 #include "net77/sock.h"
 #include "net77/string_utils.h"
 #include "net77/utils.h"
+#include "net77/error_utils.h"
 
 #define DEFAULT_CLIENT_BUF_SIZE (8*1024)
 #define DEFAULT_SERVER_CONNECT_TIMEOUT_USEC 5000000
@@ -95,18 +96,10 @@ int newSocketSendReceiveClose(const char *host, int port, StringRef data, String
 
 #else
 
-ErrorStatus newSocketSendReceiveClose(const char *host, int port, StringRef data, String *out, int client_buf_size,
-                                      ssize_t server_connect_timeout_usec, ssize_t server_response_timeout_usec,
-                                      size_t max_response_size, ssize_t response_done_timeout_usec,
-                                      int enable_delaying_sockets) {
-    LOG_MSG("called newSocketSendRecvClose at %zd\n", getTimeInUSecs() / 1000);
-    if (client_buf_size < 0)
-        client_buf_size = DEFAULT_CLIENT_BUF_SIZE;
+ErrorStatus connectSocket(const char *host, int port, ssize_t server_connect_timeout_usec, int enable_delaying_sockets,
+                          size_t *out_fd) {
     if (server_connect_timeout_usec < 0)
         server_connect_timeout_usec = DEFAULT_SERVER_CONNECT_TIMEOUT_USEC;
-    if (server_response_timeout_usec < 0)
-        server_response_timeout_usec = DEFAULT_SERVER_RESPONSE_TIMEOUT_USEC;
-
     int client_fd;
     struct addrinfo hints, *res, *p;
     char port_str[6];
@@ -119,7 +112,7 @@ ErrorStatus newSocketSendReceiveClose(const char *host, int port, StringRef data
 
     // Resolve the host name or IP address
     if (getaddrinfo(host, port_str, &hints, &res) != 0) {
-        return 1;
+        return -1;
     }
 
     // Try each address until we successfully connect
@@ -142,7 +135,7 @@ ErrorStatus newSocketSendReceiveClose(const char *host, int port, StringRef data
         if (connect(client_fd, p->ai_addr, p->ai_addrlen) == 0) {
             break;  // Successfully connected
         }
-        LOG_MSG("newSocketSendRecvClose connect failed\n");
+        LOG_MSG("connectSocket connect process failed\n");
 
         close(client_fd);
     }
@@ -150,61 +143,120 @@ ErrorStatus newSocketSendReceiveClose(const char *host, int port, StringRef data
     freeaddrinfo(res);
 
     if (p == NULL) {  // No address succeeded
-        return 1;
+        return -1;
     }
 
     if (makeSocketNonBlocking(client_fd)) {
         close(client_fd);
-        return 1;
+        return -1;
     }
 
-    // Send data
-    int err = sendAllData(client_fd, data.data, data.len, response_done_timeout_usec);
-    if (err) {
-        if (err > 0)  // (err < 0) => socket forcefully closed by sendAllData
-            close(client_fd);
-        return 1;
-    }
+    *out_fd = client_fd;
+    return 0;
+}
 
-    // Poll once with server_response_timeout_usec timeout to give the server a chance to respond
+#define SET_OPTIONAL_SIGNAL(sig, value) if (sig) *sig = value
+
+ErrorStatus waitThenRecvAllData(size_t fd, ssize_t server_response_timeout_usec, ssize_t response_done_timeout_usec,
+                                int client_buf_size, size_t max_response_size, String *out, int *out_closed_sock) {
+    if (client_buf_size < 0)
+        client_buf_size = DEFAULT_CLIENT_BUF_SIZE;
+    if (server_response_timeout_usec < 0)
+        server_response_timeout_usec = DEFAULT_SERVER_RESPONSE_TIMEOUT_USEC;
+    SET_OPTIONAL_SIGNAL(out_closed_sock, 0);
+    int client_fd = (int) fd;
     struct pollfd pfd;
     pfd.fd = client_fd;
     pfd.events = POLLIN | POLLERR | POLLHUP | POLLNVAL;
     pfd.revents = 0;
     int timeout_ms = (int) ((server_response_timeout_usec + 999) / 1000);
+
+    // Poll once with server_response_timeout_usec timeout to give the server a chance to respond
     int poll_out = poll(&pfd, 1, timeout_ms);
-    if (poll_out < 0 || !poll_out || pfd.revents & POLLERR || pfd.revents & POLLHUP) {
-        LOG_MSG("newSocketSendRecvClose timeout or error at %zd\n", getTimeInUSecs() / 1000);
+
+    if (poll_out < 0 || !poll_out) {
+        // timeout
+        LOG_MSG("waitThenRecvAllData timeout (or polling error) at %zd\n", getTimeInUSecs() / 1000);
+        return 1;
+    } else if (pfd.revents & POLLERR) {
+        // socket error
         close(client_fd);
-        return 1;
+        SET_OPTIONAL_SIGNAL(out_closed_sock, 1);
+        LOG_MSG("waitThenRecvAllData POLLERR (-> closing socket) at %zd\n", getTimeInUSecs() / 1000);
+        return -1;
+    } else if (pfd.revents & POLLHUP) {
+        // other side closed conn
+        close(client_fd);
+        SET_OPTIONAL_SIGNAL(out_closed_sock, 1);
+        LOG_MSG("waitThenRecvAllData POLLHUP (-> closing socket) at %zd\n", getTimeInUSecs() / 1000);
+        return 0;
     } else if (pfd.revents & POLLNVAL) {
-        // do not try to close the socket, it's already closed / has never existed
-        return 1;
+        // socket isn't even open
+        SET_OPTIONAL_SIGNAL(out_closed_sock, 1);
+        LOG_MSG("waitThenRecvAllData POLLNVAL at %zd\n", getTimeInUSecs() / 1000);
+        // return -1 to signify the socket is already closed / has never existed
+        return -1;
     } else {
+        // ok
         assert(pfd.revents & POLLIN);
     }
+
     // Receive response
     StringBuilder builder = newStringBuilder(client_buf_size);
     size_t ssize_t_max = (size_t) ((ssize_t) -1);
     ssize_t max_resp_size = (ssize_t) (max_response_size > ssize_t_max ? ssize_t_max : max_response_size);
-    err = recvAllDataSb(client_fd, &builder, max_resp_size, response_done_timeout_usec, client_buf_size);
+    ErrorStatus err = recvAllDataSb(client_fd, &builder, max_resp_size, response_done_timeout_usec, client_buf_size, NULL);
     if (err) {
-        if (err > 0)  // (err < 0) => socket forcefully closed by recvAllDataSb
-            close(client_fd);
         stringBuilderDestroy(&builder);
-        return 1;
+        return err;
     }
 
     *out = stringBuilderBuildAndDestroy(&builder);
 
-    LOG_MSG("newSocketSendRecvClose closing socket at %zd\n", getTimeInUSecs() / 1000);
+    return 0;
+}
+
+#define HANDLE_REQUEST_ERR(err) \
+if ((err)) { \
+    if ((err) > 0)  /* (err < 0) => socket was force-closed */ \
+        closeSocket(fd); \
+    return 1; \
+}
+
+#endif
+
+ErrorStatus newSocketSendReceiveClose(const char *host, int port, StringRef data, String *out, int client_buf_size,
+                                      ssize_t server_connect_timeout_usec, ssize_t server_response_timeout_usec,
+                                      size_t max_response_size, ssize_t response_done_timeout_usec,
+                                      int enable_delaying_sockets) {
+    LOG_MSG("called newSocketSendRecvClose at %zd\n", getTimeInUSecs() / 1000);
+
+    // Connect to peer
+    size_t fd;
+    ErrorStatus err = connectSocket(host, port, server_connect_timeout_usec, enable_delaying_sockets, &fd);
+    HANDLE_REQUEST_ERR(err);
+
+    int closed_sock;
+    // Send data
+    err = sendAllData(fd, data.data, data.len, response_done_timeout_usec, &closed_sock);
+    if (closed_sock)
+        return 1;
+    HANDLE_REQUEST_ERR(err);
+
+    // Recv response
+    err = waitThenRecvAllData(fd, server_response_timeout_usec, response_done_timeout_usec, client_buf_size,
+                              max_response_size, out, &closed_sock);
+    HANDLE_REQUEST_ERR(err);
+
     // Close the socket
-    close(client_fd);
+    if (!closed_sock)
+        closeSocket(fd);
+    LOG_MSG("newSocketSendRecvClose closing socket at %zd\n", getTimeInUSecs() / 1000);
+
 #ifdef NET77_ENABLE_LOGGING
     usleep(1000);
     LOG_MSG("newSocketSendRecvClose 1ms after closing socket at %zd\n", getTimeInUSecs() / 1000);
 #endif
+
     return 0;
 }
-
-#endif

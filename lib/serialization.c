@@ -1,6 +1,6 @@
 #include "net77/serde.h"
 
-#define BUBBLE_UP_ERR(err) if (err) return 1
+#define BUBBLE_UP_ERR(err) if (err) return err
 
 // append a literal whose size is known at compile time
 #define STRING_BUILDER_APPEND_CONST_SIZED(builder, literal) stringBuilderAppend(builder, literal, sizeof(literal) - 1)
@@ -51,7 +51,7 @@ ErrorStatus serializeHTTPVersion(Version v, StringBuilder *builder) {
 ErrorStatus serializeStatusCode(int status_code, StringBuilder *builder) {
     char status_code_str[] = "\0\0\0";
     for (int i = 0; i < sizeof(status_code_str) - 1; i++) {
-        status_code_str[sizeof(status_code_str) - 2 - i] = (char)(status_code % 10 + '0');
+        status_code_str[sizeof(status_code_str) - 2 - i] = (char) (status_code % 10 + '0');
         status_code /= 10;
     }
     STRING_BUILDER_APPEND_CONST_SIZED(builder, status_code_str);

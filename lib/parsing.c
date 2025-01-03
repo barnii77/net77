@@ -7,7 +7,7 @@
 
 #define STR_LOWER_EQ_LITERAL(expr, literal) (!strLowerCmp((expr), (literal), sizeof(literal) - 1))
 
-#define BUBBLE_UP_ERR(err) if (err) return 1
+#define BUBBLE_UP_ERR(err) if (err) return err
 
 int strToInt(const char *data, size_t len) {
     int out = 0;

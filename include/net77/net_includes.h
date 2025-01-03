@@ -7,6 +7,12 @@
 #include "net77/string_utils.h"
 #include "net77/error_utils.h"
 
+/**
+ * close an open socket (this is kind of unsafe and does not check if the socket is open at all)
+ * @param fd the socket file descriptor as a size_t for OS-independence
+ */
+void closeSocket(size_t fd);
+
 ErrorStatus setSendRecvTimeout(size_t fd, ssize_t timeout_usec);
 
 /**
@@ -14,9 +20,10 @@ ErrorStatus setSendRecvTimeout(size_t fd, ssize_t timeout_usec);
  * @param buf the buffer to send the data from
  * @param len the length of the buffer
  * @param timeout_usec the timeout in microseconds
+ * @param out_closed_sock *optional* out param set to 1 if the socket was closed or is invalid, otherwise set to 0
  * @return 0 on success, x != 0 on error: returns 1 on normal error and -1 on error that lead to the socket being closed.
  */
-ErrorStatus sendAllData(size_t socket_fd, const char *buf, size_t len, ssize_t timeout_usec);
+ErrorStatus sendAllData(size_t socket_fd, const char *buf, size_t len, ssize_t timeout_usec, int *out_closed_sock);
 
 /**
  * @param socket_fd the socket file descriptor
@@ -24,9 +31,11 @@ ErrorStatus sendAllData(size_t socket_fd, const char *buf, size_t len, ssize_t t
  * @param len the length of the buffer
  * @param timeout_usec the timeout in microseconds
  * @param out_bytes_received if not NULL, will be set to the number of bytes received
+ * @param out_closed_sock *optional* out param set to 1 if the socket was closed or is invalid, otherwise set to 0
  * @return 0 on success, x != 0 on error: returns 1 on normal error and -1 on error that lead to the socket being closed.
  */
-ErrorStatus recvAllData(size_t socket_fd, char *buf, size_t len, ssize_t timeout_usec, size_t *out_bytes_received);
+ErrorStatus recvAllData(size_t socket_fd, char *buf, size_t len, ssize_t timeout_usec, size_t *out_bytes_received,
+                        int *out_closed_sock);
 
 /**
  * @param socket_fd the socket file descriptor
@@ -36,10 +45,13 @@ ErrorStatus recvAllData(size_t socket_fd, char *buf, size_t len, ssize_t timeout
  * @param sb_min_cap the minimum remaining capacity of the StringBuilder:
  * sb.cap - sb.len < sb_min_cap -> stringBuilderExpandBuf(sb, sb.len + sb_min_cap).
  * If sb_min_cap < 0, the default value (DEFAULT_RECV_ALL_DATA_SB_MIN_CAP) is used.
+ * @param out_closed_sock *optional* out param set to 1 if the socket was closed or is invalid, otherwise set to 0
  * @return 0 on success, x != 0 on error: returns 1 on normal error and -1 on error that lead to the socket being closed.
  * @note It is the callers responsibility to free the StringBuilder
  */
-ErrorStatus recvAllDataSb(size_t socket_fd, StringBuilder *builder, ssize_t max_len, ssize_t timeout_usec, ssize_t sb_min_cap);
+ErrorStatus
+recvAllDataSb(size_t socket_fd, StringBuilder *builder, ssize_t max_len, ssize_t timeout_usec, ssize_t sb_min_cap,
+              int *out_closed_sock);
 
 #if defined(_WIN32) || defined(_WIN64)
 // Include Windows-specific headers

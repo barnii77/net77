@@ -85,8 +85,15 @@ ErrorStatus setSendRecvTimeout(size_t fd, ssize_t timeout_usec) {
     return 0;
 }
 
-ErrorStatus sendAllData(size_t socket_fd, const char *buf, size_t len, ssize_t timeout_usec) {
+void closeSocket(size_t fd) {
+    close((int) fd);
+}
+
+#define SET_OPTIONAL_SIGNAL(sig, value) if (sig) *sig = value
+
+ErrorStatus sendAllData(size_t socket_fd, const char *buf, size_t len, ssize_t timeout_usec, int *out_closed_sock) {
     LOG_MSG("called sendAllData at %zd\n", getTimeInUSecs() / 1000);
+    SET_OPTIONAL_SIGNAL(out_closed_sock, 0);
     int sockfd = (int) socket_fd;
     size_t bytes_sent = 0;
     ssize_t bytes_sent_this_iter;
@@ -107,10 +114,11 @@ ErrorStatus sendAllData(size_t socket_fd, const char *buf, size_t len, ssize_t t
         // error handling
         if (pfd.revents & POLLERR || pfd.revents & POLLHUP) {
             close(sockfd);
+            SET_OPTIONAL_SIGNAL(out_closed_sock, 1);
             LOG_MSG("socket closed due to ERR/HUP\n");
             return -1;
-        }
-        if (pfd.revents & POLLNVAL) {
+        } else if (pfd.revents & POLLNVAL) {
+            SET_OPTIONAL_SIGNAL(out_closed_sock, 1);
             LOG_MSG("closed due to NVAL\n");
             return -1;
         }
@@ -128,9 +136,11 @@ ErrorStatus sendAllData(size_t socket_fd, const char *buf, size_t len, ssize_t t
     return 0;
 }
 
-ErrorStatus recvAllData(size_t socket_fd, char *buf, size_t len, ssize_t timeout_usec, size_t *out_bytes_received) {
+ErrorStatus recvAllData(size_t socket_fd, char *buf, size_t len, ssize_t timeout_usec, size_t *out_bytes_received,
+                        int *out_closed_sock) {
     assert(buf);
     LOG_MSG("called recvAllData at %zd\n", getTimeInUSecs() / 1000);
+    SET_OPTIONAL_SIGNAL(out_closed_sock, 0);
     int sockfd = (int) socket_fd;
     size_t bytes_received = 0;
     ssize_t bytes_received_this_iter;
@@ -149,12 +159,19 @@ ErrorStatus recvAllData(size_t socket_fd, char *buf, size_t len, ssize_t timeout
             break;
 
         // error handling
-        if (pfd.revents & POLLERR || pfd.revents & POLLHUP) {
+        if (pfd.revents & POLLERR) {
             close(sockfd);
-            LOG_MSG("socket closed due to ERR/HUP\n");
+            SET_OPTIONAL_SIGNAL(out_closed_sock, 1);
+            LOG_MSG("socket closed due to ERR (TCP RST)\n");
             return -1;
-        }
-        if (pfd.revents & POLLNVAL) {
+        } else if (pfd.revents & POLLHUP) {
+            close(sockfd);
+            SET_OPTIONAL_SIGNAL(out_closed_sock, 1);
+            LOG_MSG("socket closed due to HUP (TCP FIN)\n");
+            // not sure if this should be an error, but I guess not since server sent data and then closed conn...?
+            return 0;
+        } else if (pfd.revents & POLLNVAL) {
+            SET_OPTIONAL_SIGNAL(out_closed_sock, 1);
             LOG_MSG("closed due to NVAL\n");
             return -1;
         }
@@ -176,7 +193,9 @@ ErrorStatus recvAllData(size_t socket_fd, char *buf, size_t len, ssize_t timeout
 
 #define DEFAULT_RECV_ALL_DATA_SB_MIN_CAP (1024)
 
-ErrorStatus recvAllDataSb(size_t socket_fd, StringBuilder *builder, ssize_t max_len, ssize_t timeout_usec, ssize_t sb_min_cap) {
+ErrorStatus
+recvAllDataSb(size_t socket_fd, StringBuilder *builder, ssize_t max_len, ssize_t timeout_usec, ssize_t sb_min_cap,
+              int *out_closed_sock) {
     assert(builder);
     if (sb_min_cap < 0)
         sb_min_cap = DEFAULT_RECV_ALL_DATA_SB_MIN_CAP;
@@ -185,6 +204,7 @@ ErrorStatus recvAllDataSb(size_t socket_fd, StringBuilder *builder, ssize_t max_
 
     LOG_MSG("called recvAllData(StringBuilder) at %zd\n", getTimeInUSecs() / 1000);
 
+    SET_OPTIONAL_SIGNAL(out_closed_sock, 0);
     int sockfd = (int) socket_fd;
     size_t bytes_received = 0;
     ssize_t bytes_received_this_iter;
@@ -203,13 +223,19 @@ ErrorStatus recvAllDataSb(size_t socket_fd, StringBuilder *builder, ssize_t max_
             break;
 
         // error handling
-        if (pfd.revents & POLLERR || pfd.revents & POLLHUP) {
+        if (pfd.revents & POLLERR) {
             close(sockfd);
-            LOG_MSG("socket closed due to ERR/HUP\n");
+            SET_OPTIONAL_SIGNAL(out_closed_sock, 1);
+            LOG_MSG("socket closed due to ERR (TCP RST)\n");
             return -1;
-        }
-        if (pfd.revents & POLLNVAL) {
-            LOG_MSG("closed due to NVAL\n");
+        } else if (pfd.revents & POLLHUP) {
+            close(sockfd);
+            SET_OPTIONAL_SIGNAL(out_closed_sock, 1);
+            LOG_MSG("socket closed due to HUP (TCP FIN)\n");
+            return 0;
+        } else if (pfd.revents & POLLNVAL) {
+            SET_OPTIONAL_SIGNAL(out_closed_sock, 1);
+            LOG_MSG("already closed due to NVAL\n");
             return -1;
         }
 
@@ -219,7 +245,7 @@ ErrorStatus recvAllDataSb(size_t socket_fd, StringBuilder *builder, ssize_t max_
 
         // recv data
         if (builder->cap - builder->len < sb_min_cap)
-            stringBuilderExpandBuf(builder, builder->len + sb_min_cap);
+            stringBuilderExpandBuf(builder, builder->cap + (sb_min_cap + builder->len - builder->cap));
         if ((bytes_received_this_iter = recv(sockfd, builder->data + builder->len, builder->cap - builder->len, 0)) < 0)
             assert(0 && "unreachable because of the poll");
 

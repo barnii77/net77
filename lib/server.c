@@ -332,11 +332,11 @@ ErrorStatus runServer(void *callback_args, ThreadPool *thread_pool, const char *
                     StringBuilder builder = newStringBuilder(server_buf_size);
                     size_t ssize_t_max = 0x7FFFFFFFFFFFFFFF;
                     ssize_t max_req_size = (ssize_t) (max_request_size > ssize_t_max ? ssize_t_max : max_request_size);
-                    int err = recvAllDataSb(fd, &builder, max_req_size, recv_timeout_usec, server_buf_size);
+                    ErrorStatus err = recvAllDataSb(fd, &builder, max_req_size, recv_timeout_usec, server_buf_size, &conn_was_closed);
                     LOG_MSG("runServer received data from fd %d\n", fd);
 
                     // connection was closed
-                    if (builder.len == 0 || err) {
+                    if (err || conn_was_closed || builder.len == 0) {
                         pfd->revents = 0;
                         if (!mcfsSetRemove(&timed_conn_pollfds, (const char *) pfd, 0) && err > 0)
                             close(fd);
