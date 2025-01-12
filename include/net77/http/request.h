@@ -1,9 +1,9 @@
-#ifndef NET77_REQUEST_H
-#define NET77_REQUEST_H
+#ifndef NET77_HTTP_REQUEST_H
+#define NET77_HTTP_REQUEST_H
 
-#include "net77/serde.h"
+#include "net77/http/serde.h"
 #include "net77/int_includes.h"
-#include "net77/error_utils.h"
+#include "net77/type_utils.h"
 
 typedef struct Session {
     size_t socket_fd;
@@ -28,7 +28,7 @@ Session newSession();
 ErrorStatus openSession(const char *host, int port, ssize_t connect_timeout_usec, Session *out);
 
 /**
- * sends a request using a Request struct given an existing session
+ * sends a httpRequest using a Request struct given an existing session
  * @param session the session
  * @param req Request struct pointer
  * @param out out param to write the response to (as a string)
@@ -37,19 +37,19 @@ ErrorStatus openSession(const char *host, int port, ssize_t connect_timeout_usec
  * @return err (0 means success)
  */
 ErrorStatus
-requestInSession(Session *session, Request *req, String *out, size_t max_response_size, ssize_t response_timeout_usec);
+httpRequestInSession(Session *session, HttpRequest *req, String *out, size_t max_response_size, ssize_t response_timeout_usec);
 
 /**
- * make a request using a request string given an existing session
+ * make a request using a httpRequest string given an existing session
  * @param session the session
- * @param req request content as a string
+ * @param req httpRequest content as a string
  * @param out out param to write the response to (as a string)
  * @param max_response_size in bytes
  * @param response_timeout_usec how many microseconds the function should wait for the response to arrive
  * @return err (0 means success)
  */
-ErrorStatus rawRequestInSession(Session *session, StringRef req, String *out, size_t max_response_size,
-                                ssize_t response_timeout_usec);
+ErrorStatus httpRawRequestInSession(Session *session, StringRef req, String *out, size_t max_response_size,
+                                    ssize_t response_timeout_usec);
 
 /**
  * close session
@@ -59,7 +59,7 @@ ErrorStatus rawRequestInSession(Session *session, StringRef req, String *out, si
 ErrorStatus closeSession(Session *session);
 
 /**
- * make a standalone request using a Request struct
+ * make a standalone httpRequest using a Request struct
  * @param host the host IP address or URL
  * @param port the host port to connect to
  * @param req Request struct pointer
@@ -71,14 +71,14 @@ ErrorStatus closeSession(Session *session);
  * @return err (0 means success)
  */
 ErrorStatus
-request(const char *host, int port, Request *req, String *out, size_t max_response_size, ssize_t connect_timeout_usec,
-        ssize_t response_timeout_usec);
+httpRequest(const char *host, int port, HttpRequest *req, String *out, size_t max_response_size, ssize_t connect_timeout_usec,
+            ssize_t response_timeout_usec);
 
 /**
- * make a standalone request using a request string
+ * make a standalone request using a httpRequest string
  * @param host the host IP address or URL
  * @param port the host port to connect to
- * @param req request content as a string
+ * @param req httpRequest content as a string
  * @param out out param to write the response to (as a string)
  * @param max_response_size in bytes
  * @param connect_timeout_usec after how many microseconds the connection attempt will time out and the function will
@@ -86,7 +86,7 @@ request(const char *host, int port, Request *req, String *out, size_t max_respon
  * @param response_timeout_usec how many microseconds the function should wait for the response to arrive
  * @return err (0 means success)
  */
-ErrorStatus rawRequest(const char *host, int port, StringRef req, String *out, size_t max_response_size,
-                       ssize_t connect_timeout_usec, ssize_t response_timeout_usec);
+ErrorStatus httpRawRequest(const char *host, int port, StringRef req, String *out, size_t max_response_size,
+                           ssize_t connect_timeout_usec, ssize_t response_timeout_usec);
 
 #endif

@@ -1,22 +1,23 @@
 #include <stdlib.h>
 #include <string.h>
-#include "net77/serde.h"
-#include "net77/error_utils.h"
+#include "net77/http/serde.h"
+#include "net77/type_utils.h"
 
 #define STR_EQ_LITERAL(expr, literal) (!strncmp((expr), (literal), sizeof(literal) - 1))
 
 #define STR_LOWER_EQ_LITERAL(expr, literal) (!strLowerCmp((expr), (literal), sizeof(literal) - 1))
 
-#define BUBBLE_UP_ERR(err) if (err) return err
+#define BUBBLE_ERR_SETUP() int BUBBLE_UP_ERR_EVAR = 0
+#define BUBBLE_UP_ERR(expr) if ((BUBBLE_UP_ERR_EVAR = (expr))) return BUBBLE_UP_ERR_EVAR
 
-int strToInt(const char *data, size_t len) {
+int strToInt(const char *nonnull data, size_t len) {
     int out = 0;
     for (size_t i = 0; i < len; i++)
         out = out * 10 + data[i] - '0';
     return out;
 }
 
-int expectSpace(StringRef *str) {
+int expectSpace(StringRef *nonnull str) {
     if (str->len == 0 || str->data[0] != ' ')
         return 1;
     str->data++;
@@ -24,7 +25,7 @@ int expectSpace(StringRef *str) {
     return 0;
 }
 
-int expectNewline(StringRef *str) {
+int expectNewline(StringRef *nonnull str) {
     if (str->len <= 1 || str->data[0] != '\r' || str->data[1] != '\n')
         return 1;
     str->data += 2;
@@ -32,7 +33,7 @@ int expectNewline(StringRef *str) {
     return 0;
 }
 
-int expectChar(StringRef *str, char c) {
+int expectChar(StringRef *nonnull str, char c) {
     if (str->len == 0 || str->data[0] != c)
         return 1;
     str->data++;
@@ -42,10 +43,10 @@ int expectChar(StringRef *str, char c) {
 
 char toLower(char c) {
     char off = (char) (('A' <= c && c <= 'Z') * ('a' - 'A'));
-    return c + off;
+    return (char) (c + off);
 }
 
-int strLowerCmp(const char *s1, const char *s2, int len) {
+int strLowerCmp(const char *nonnull s1, const char *nonnull s2, int len) {
     for (int i = 0; i < len; i++) {
         char a = toLower(s1[i]), b = toLower(s2[i]);
         if (a != b || a == '\0' || b == '\0')
@@ -62,7 +63,7 @@ int isDigit(char c) {
     return '0' <= c && c <= '9';
 }
 
-StringRef parseWord(StringRef *str) {
+StringRef parseWord(StringRef *nonnull str) {
     for (int i = 0; i < str->len; i++) {
         char c = str->data[i];
         if (!isLetter(c)) {
@@ -76,7 +77,7 @@ StringRef parseWord(StringRef *str) {
     return out;
 }
 
-StringRef parseNumber(StringRef *str) {
+StringRef parseNumber(StringRef *nonnull str) {
     for (int i = 0; i < str->len; i++) {
         char c = str->data[i];
         if (!isDigit(c)) {
@@ -90,7 +91,7 @@ StringRef parseNumber(StringRef *str) {
     return out;
 }
 
-ErrorStatus parseMethod(StringRef *str, Method *method) {
+ErrorStatus parseMethod(StringRef *nonnull str, HttpMethod *nonnull method) {
     StringRef ms = parseWord(str);
     if (STR_EQ_LITERAL(ms.data, "GET")) {
         *method = METHOD_GET;
@@ -116,7 +117,7 @@ ErrorStatus parseMethod(StringRef *str, Method *method) {
     return 0;
 }
 
-ErrorStatus parseURL(StringRef *str, StringRef *url) {
+ErrorStatus parseURL(StringRef *nonnull str, StringRef *nonnull url) {
     int i;
     for (i = 0; i < str->len; i++) {
         if (str->data[i] == ' ') {
@@ -130,32 +131,41 @@ ErrorStatus parseURL(StringRef *str, StringRef *url) {
     return i == 0;
 }
 
-ErrorStatus parseVersion(StringRef *str, Version *v) {
+ErrorStatus parseHttpVersion(StringRef *nonnull str, HttpVersion *nonnull v) {
+    BUBBLE_ERR_SETUP();
     StringRef http = parseWord(str);
     if (!STR_LOWER_EQ_LITERAL(http.data, "http"))
         return 1;
 
     BUBBLE_UP_ERR(expectChar(str, '/'));
     StringRef major = parseNumber(str);
-    if (major.len > 1 || major.data[0] != '0' && major.data[0] != '1' && major.data[0] != '2')
+    if (major.len != 1 || major.data[0] != '0' && major.data[0] != '1' && major.data[0] != '2')
         return 1;
     int maj = major.data[0] - '0';
 
     BUBBLE_UP_ERR(expectChar(str, '.'));
     StringRef minor = parseNumber(str);
+    if (minor.len != 1)
+        return 1;
     int min = minor.data[0] - '0';
 
-    if (maj == 0)
+    if (maj == 0) {
+        if (min != 9)
+            return 1;
         *v = VERSION_HTTP09;  // use oldest supported version
-    else if (maj == 1)
+    } else if (maj == 1) {
+        if (min != 0 && min != 1)
+            return 1;
         *v = min == 0 ? VERSION_HTTP10 : VERSION_HTTP11;
-    else
+    } else {
         *v = VERSION_HTTP11;  // use newest supported version
+    }
 
     return 0;
 }
 
-ErrorStatus parseHeaderField(StringRef *str, HeaderField *h) {
+ErrorStatus parseHeaderField(StringRef *nonnull str, HttpHeaderField *nonnull h) {
+    BUBBLE_ERR_SETUP();
     StringRef name = parseWord(str);
     BUBBLE_UP_ERR(expectChar(str, ':'));
     while (str->len > 0 && str->data[0] == ' ') {
@@ -172,13 +182,13 @@ ErrorStatus parseHeaderField(StringRef *str, HeaderField *h) {
     if (str->len == 0)
         return 1;  // missing final empty line to terminate http header and mark start of optional body
     StringRef value = {end - start, start};
-    HeaderField out = {name, value};
+    HttpHeaderField out = {name, value};
     *h = out;
     return 0;
 }
 
-ErrorStatus parseHeaderStruct(StringRef *str, HeaderStruct *hs) {
-    int err, count = 0, last_was_nl = 0, is_beginning = 1;
+ErrorStatus parseHeaderStruct(StringRef *nonnull str, HttpHeaderStruct *nonnull hs) {
+    int err = 0, count = 0, last_was_nl = 0, is_beginning = 1;
     for (int i = 0; i < str->len - 1; i++) {
         if (str->data[i] == '\r' && str->data[i + 1] == '\n') {
             if (is_beginning) {
@@ -196,8 +206,8 @@ ErrorStatus parseHeaderStruct(StringRef *str, HeaderStruct *hs) {
         is_beginning = 0;
     }
 
-    int hfsize = count * (int) sizeof(HeaderField);
-    HeaderField *hf = malloc(hfsize);
+    int hfsize = count * (int) sizeof(HttpHeaderField);
+    HttpHeaderField *hf = malloc(hfsize);
     if (!hf)
         return 1;
     for (int i = 0; i < count; i++) {
@@ -219,7 +229,7 @@ ErrorStatus parseHeaderStruct(StringRef *str, HeaderStruct *hs) {
     return 0;
 }
 
-ErrorStatus parseHeaderString(StringRef *str, StringRef *h) {
+ErrorStatus parseHeaderString(StringRef *nonnull str, StringRef *nonnull h) {
     const char *start = str->data;
     int last_was_nl = 0, is_beginning = 0;
     for (;; str->data++, str->len--) {
@@ -251,36 +261,42 @@ ErrorStatus parseHeaderString(StringRef *str, StringRef *h) {
     return 0;
 }
 
-ErrorStatus parseHeader(StringRef *str, Header *head, int parse_header_into_structs) {
+ErrorStatus parseHeader(StringRef *nonnull str, HttpHeader *nonnull head, bool parse_header_into_structs) {
+    BUBBLE_ERR_SETUP();
     if (parse_header_into_structs) {
         head->type = HEADER_AS_STRUCT;
-        HeaderStruct hs;
+        HttpHeaderStruct hs;
         BUBBLE_UP_ERR(parseHeaderStruct(str, &hs));
-        HeaderData data = {.structure = hs};
+        HttpHeaderData data = {.structure = hs};
         head->data = data;
     } else {
         head->type = HEADER_AS_STRING;
         StringRef h;
         BUBBLE_UP_ERR(parseHeaderString(str, &h));
-        HeaderData data = {.string = h};
+        HttpHeaderData data = {.string = h};
         head->data = data;
     }
     return 0;
 }
 
-ErrorStatus parseBody(StringRef *str, StringRef *body) {
+ErrorStatus parseHttpHeader(StringRef str, HttpHeader *nonnull head, bool parse_header_into_structs) {
+    return parseHeader(&str, head, parse_header_into_structs);
+}
+
+ErrorStatus parseBody(StringRef *nonnull str, StringRef *nonnull body) {
     body->data = str->data;
     body->len = str->len;
     return 0;
 }
 
-ErrorStatus parseRequest(StringRef str, Request *req, int parse_header_into_structs) {
+ErrorStatus parseHttpRequest(StringRef str, HttpRequest *nonnull req, int parse_header_into_structs) {
+    BUBBLE_ERR_SETUP();
     if (!str.len)
         return 1;
 
-    Method method;
+    HttpMethod method;
     StringRef url;
-    Version version;
+    HttpVersion version;
 
     if (str.data[0] == '/') {
         // for backwards compatibility with HTTP 0.9, a request line containing only URI is allowed
@@ -298,11 +314,11 @@ ErrorStatus parseRequest(StringRef str, Request *req, int parse_header_into_stru
         BUBBLE_UP_ERR(expectSpace(&str));
 
         // parse version
-        BUBBLE_UP_ERR(parseVersion(&str, &version));
+        BUBBLE_UP_ERR(parseHttpVersion(&str, &version));
         BUBBLE_UP_ERR(expectNewline(&str));
     }
 
-    Header head;
+    HttpHeader head;
     BUBBLE_UP_ERR(parseHeader(&str, &head, parse_header_into_structs));
     BUBBLE_UP_ERR(expectNewline(&str));
 
@@ -318,9 +334,10 @@ ErrorStatus parseRequest(StringRef str, Request *req, int parse_header_into_stru
     return 0;
 }
 
-ErrorStatus parseResponse(StringRef str, Response *resp, int parse_header_into_structs) {
-    Version version;
-    BUBBLE_UP_ERR(parseVersion(&str, &version));
+ErrorStatus parseHttpResponse(StringRef str, HttpResponse *nonnull resp, int parse_header_into_structs) {
+    BUBBLE_ERR_SETUP();
+    HttpVersion version;
+    BUBBLE_UP_ERR(parseHttpVersion(&str, &version));
     BUBBLE_UP_ERR(expectSpace(&str));
 
     StringRef status_code_str = parseNumber(&str);
@@ -337,7 +354,7 @@ ErrorStatus parseResponse(StringRef str, Response *resp, int parse_header_into_s
     status_msg.len -= str.len;
     BUBBLE_UP_ERR(expectNewline(&str));
 
-    Header head;
+    HttpHeader head;
     BUBBLE_UP_ERR(parseHeader(&str, &head, parse_header_into_structs));
     BUBBLE_UP_ERR(expectNewline(&str));
 

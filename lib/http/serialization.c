@@ -1,11 +1,12 @@
-#include "net77/serde.h"
+#include "net77/http/serde.h"
 
-#define BUBBLE_UP_ERR(err) if (err) return err
+#define BUBBLE_ERR_SETUP() int err = 0
+#define BUBBLE_UP_ERR(expr) if ((err = (expr))) return err
 
 // append a literal whose size is known at compile time
 #define STRING_BUILDER_APPEND_CONST_SIZED(builder, literal) stringBuilderAppend(builder, literal, sizeof(literal) - 1)
 
-ErrorStatus serializeMethod(Method method, StringBuilder *builder) {
+ErrorStatus serializeMethod(HttpMethod method, StringBuilder *builder) {
     if (method == METHOD_GET) {
         STRING_BUILDER_APPEND_CONST_SIZED(builder, "GET");
     } else if (method == METHOD_HEAD) {
@@ -35,7 +36,7 @@ ErrorStatus serializeURL(StringRef url, StringBuilder *builder) {
     return 0;
 }
 
-ErrorStatus serializeHTTPVersion(Version v, StringBuilder *builder) {
+ErrorStatus serializeHttpVersion(HttpVersion v, StringBuilder *builder) {
     if (v == VERSION_HTTP09) {
         STRING_BUILDER_APPEND_CONST_SIZED(builder, "HTTP/0.9");
     } else if (v == VERSION_HTTP10) {
@@ -58,10 +59,10 @@ ErrorStatus serializeStatusCode(int status_code, StringBuilder *builder) {
     return 0;
 }
 
-ErrorStatus serializeHeader(Header *head, StringBuilder *builder) {
+ErrorStatus serializeHttpHeader(HttpHeader *head, StringBuilder *builder) {
     if (head->type == HEADER_AS_STRUCT) {
         for (int i = 0; i < head->data.structure.count; i++) {
-            HeaderField f = head->data.structure.fields[i];
+            HttpHeaderField f = head->data.structure.fields[i];
             stringBuilderAppend(builder, f.name.data, f.name.len);
             STRING_BUILDER_APPEND_CONST_SIZED(builder, ":");
             stringBuilderAppend(builder, f.value.data, f.value.len);
@@ -75,28 +76,30 @@ ErrorStatus serializeHeader(Header *head, StringBuilder *builder) {
     return 0;
 }
 
-ErrorStatus serializeRequest(Request *req, StringBuilder *builder) {
+ErrorStatus serializeHttpRequest(HttpRequest *req, StringBuilder *builder) {
+    BUBBLE_ERR_SETUP();
     BUBBLE_UP_ERR(serializeMethod(req->method, builder));
     STRING_BUILDER_APPEND_CONST_SIZED(builder, " ");
     BUBBLE_UP_ERR(serializeURL(req->url, builder));
     STRING_BUILDER_APPEND_CONST_SIZED(builder, " ");
-    BUBBLE_UP_ERR(serializeHTTPVersion(req->version, builder));
+    BUBBLE_UP_ERR(serializeHttpVersion(req->version, builder));
     STRING_BUILDER_APPEND_CONST_SIZED(builder, "\r\n");
-    BUBBLE_UP_ERR(serializeHeader(&req->head, builder));
+    BUBBLE_UP_ERR(serializeHttpHeader(&req->head, builder));
     STRING_BUILDER_APPEND_CONST_SIZED(builder, "\r\n");
     if (req->body.len > 0)
         stringBuilderAppend(builder, req->body.data, req->body.len);
     return 0;
 }
 
-ErrorStatus serializeResponse(Response *resp, StringBuilder *builder) {
-    BUBBLE_UP_ERR(serializeHTTPVersion(resp->version, builder));
+ErrorStatus serializeHttpResponse(HttpResponse *resp, StringBuilder *builder) {
+    BUBBLE_ERR_SETUP();
+    BUBBLE_UP_ERR(serializeHttpVersion(resp->version, builder));
     STRING_BUILDER_APPEND_CONST_SIZED(builder, " ");
     BUBBLE_UP_ERR(serializeStatusCode(resp->status_code, builder));
     STRING_BUILDER_APPEND_CONST_SIZED(builder, " ");
     stringBuilderAppend(builder, resp->status_msg.data, resp->status_msg.len);
     STRING_BUILDER_APPEND_CONST_SIZED(builder, "\r\n");
-    BUBBLE_UP_ERR(serializeHeader(&resp->head, builder));
+    BUBBLE_UP_ERR(serializeHttpHeader(&resp->head, builder));
     STRING_BUILDER_APPEND_CONST_SIZED(builder, "\r\n");
     if (resp->body.len > 0)
         stringBuilderAppend(builder, resp->body.data, resp->body.len);

@@ -5,14 +5,16 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "net77/serde.h"
-#include "net77/request.h"
+#include <unistd.h>
+#include "net77/http/serde.h"
+#include "net77/http/request.h"
 #include "net77/init.h"
 #include "net77/server.h"
 #include "net77/utils.h"
 #include "net77/logging.h"
 #include "net77/net_includes.h"
 #include "net77/sock.h"
+#include "net77/http/recv_controller.h"
 
 #define printAndFlush(msg, ...) {printf(msg, ##__VA_ARGS__); fflush(stdout);}
 
@@ -173,7 +175,7 @@ static int test##test_name(void) { \
 static int test##test_name(void) { \
     StringRef dref = {strlen(test_data), test_data}; \
     String out; \
-    int err = rawRequest(removeURLPrefix(charPtrToStringRef(test_url)).data, test_port, dref, &out, -1, -1, response_timeout); \
+    int err = httpRawRequest(removeURLPrefix(charPtrToStringRef(test_url)).data, test_port, dref, &out, -1, -1, response_timeout); \
     if (!err) { \
         removeHeaderField(out.data, "Age"); \
         removeHeaderField(out.data, "Date"); \
@@ -197,10 +199,10 @@ static int test##test_name(void) { \
     Session sess = newSession(); \
     openSession(removeURLPrefix(charPtrToStringRef(test_url)).data, test_port, -1, &sess); \
     StringRef dref = {strlen(test_data), test_data}; \
-    int err; \
+    int err = 0; \
     for (int i = 0; i < n_request_repeats; i++) { \
         String out; \
-        err = rawRequestInSession(&sess, dref, &out, -1, response_timeout); \
+        err = httpRawRequestInSession(&sess, dref, &out, -1, response_timeout); \
         if (!err) { \
             removeHeaderField(out.data, "Age"); \
             removeHeaderField(out.data, "Date"); \
@@ -215,6 +217,8 @@ static int test##test_name(void) { \
                 return -1; \
             } \
             freeString(&out); \
+        } else { \
+            return err; \
         } \
     } \
     closeSession(&sess); \
@@ -245,7 +249,7 @@ static int test##name_suffix(void) { \
     const long long connection_timeout_usec = connection_timeout; \
     UnsafeSignal server_killed = 0, kill_ack = 0, server_has_started = 0; \
     if (run_server_at_all) { \
-        size_t thread = launchServerOnThread(NULL, &thread_pool, host, port, 2, 2, -1, 50000, 128, connection_timeout_usec, &server_killed, &kill_ack, 0, NULL, &server_has_started); \
+        size_t thread = launchServerOnThread(NULL, &thread_pool, host, port, 2, 2, -1, 50000, 128, connection_timeout_usec, &server_killed, &kill_ack, 0, NULL, NULL, &server_has_started); \
         if (thread == -1) \
             return -0xBAD; \
         while (!server_has_started);  /* wait for server to start */ \
@@ -254,7 +258,7 @@ static int test##name_suffix(void) { \
     const char msg[] = "hello\r\n"; \
     StringRef data = {sizeof(msg), msg}; \
     String out = {0, NULL}; \
-    int err = newSocketSendReceiveClose(host, port, data, &out, -1, -1, 500000, 128, 0, 0); \
+    int err = newSocketSendReceiveClose(host, port, data, &out, -1, -1, 500000, 128, 0, false, false, NULL); \
     if (run_server_at_all) { \
         server_killed = 1; \
         while (!kill_ack); \
@@ -340,9 +344,10 @@ void runTests(void) {
         else if (n_test_reps > 1) printAndFlush("%d/%d tests failed this iteration!\n", n_failed,
                                                 (run_all_tests ? n_tests : 1));
     }
-    if (tests_always_passed) printAndFlush("*** ALL TESTS PASSED EVERY SINGLE TIME! ***\n")
-    else printAndFlush("*** %d/%d TESTS FAILED OVERALL! ***\n", n_total_failed,
-                       n_test_reps * (run_all_tests ? n_tests : 1));
+    if (tests_always_passed) printAndFlush("*** ALL %d TEST RUNS OF %d TESTS PASSED (%d SUCCESSFUL RUNS / TEST)! ***\n",
+                                           n_test_reps * (run_all_tests ? n_tests : 1), n_tests, n_test_reps)
+    else printAndFlush("*** %d/%d TEST RUNS OF %d TESTS FAILED OVERALL! ***\n", n_total_failed,
+                       n_test_reps * (run_all_tests ? n_tests : 1), n_tests);
     socketCleanup();
 }
 

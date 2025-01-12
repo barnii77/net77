@@ -2,7 +2,7 @@
 #define NET77_SOCK_H
 
 #include "net77/string_utils.h"
-#include "net77/error_utils.h"
+#include "net77/type_utils.h"
 
 /**
  * connect a socket to a host (IP addr or URL) at a certain port and write out the socket file descriptor
@@ -23,15 +23,22 @@ ErrorStatus connectSocket(const char *host, int port, ssize_t server_connect_tim
  * @param server_response_timeout_usec how many microseconds after sending the data the function waits for a response
  * @param response_done_timeout_usec after how many microseconds the function stops waiting for more response content
  * and just returns
+ * @param response_done_timeout_is_error on response_done_timeout, if set to 1, return recoverable error (code 1),
+ * otherwise (this param set to zero), return no error (code 0).
+ * and just returns
  * @param client_buf_size how big the receive buffer should be initially before it starts growing to receive more data.
  * If -1 is passed, use default value of 8kB
  * @param max_response_size how big the response must at most be (in bytes) before it gets rejected and the function
  * @param out where the received data will be written to if successful
  * @param out_closed_sock *optional* out param set to 1 if the socket was closed or is invalid, otherwise set to 0
+ * @param keep_receiving_controller nullable callback used to determine based on what has already been received how much
+ * more data to receive (e.g. based on headers)
  * @return err (0 means success)
  */
 ErrorStatus waitThenRecvAllData(size_t fd, ssize_t server_response_timeout_usec, ssize_t response_done_timeout_usec,
-                                int client_buf_size, size_t max_response_size, String *out, int *out_closed_sock);
+                                bool response_done_timeout_is_error, int client_buf_size, size_t max_response_size,
+                                String *out, bool *out_closed_sock,
+                                RecvAllDataControllerCallback *keep_receiving_controller);
 
 /**
  * open a socket, connect to the host, send the data, receive response and close the socket
@@ -46,12 +53,16 @@ ErrorStatus waitThenRecvAllData(size_t fd, ssize_t server_response_timeout_usec,
  * @param max_response_size how big the response must at most be (in bytes) before it gets rejected and the function
  * @param response_done_timeout_usec after how many microseconds the function stops waiting for more response content
  * and just returns
+ * @param response_done_timeout_is_error whether a response done timeout should cause a non-zero error code to return
  * @param enable_delaying_sockets if zero, nagle's algorithm will be disabled. This should reduce latency.
+ * @param keep_receiving_controller nullable callback used to determine based on what has already been received how much
+ * more data to receive (e.g. based on headers)
  * @return err (0 means success)
  */
 ErrorStatus newSocketSendReceiveClose(const char *host, int port, StringRef data, String *out, int client_buf_size,
                                       ssize_t server_connect_timeout_usec, ssize_t server_response_timeout_usec,
                                       size_t max_response_size, ssize_t response_done_timeout_usec,
-                                      int enable_delaying_sockets);
+                                      bool response_done_timeout_is_error, bool enable_delaying_sockets,
+                                      RecvAllDataControllerCallback *keep_receiving_controller);
 
 #endif

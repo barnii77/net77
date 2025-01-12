@@ -1,8 +1,9 @@
 #include <stdlib.h>
 #include <memory.h>
-#include "net77/serde.h"
+#include "net77/http/serde.h"
+#include "net77/type_utils.h"
 
-void freeRequest(Request *req) {
+void freeHttpRequest(HttpRequest *nonnull req) {
     if (req->head.type == HEADER_AS_STRUCT) {
         memset(req->head.data.structure.fields, 0, req->head.data.structure.count);
         free(req->head.data.structure.fields);
@@ -12,7 +13,7 @@ void freeRequest(Request *req) {
     }
 }
 
-void freeResponse(Response *resp) {
+void freeHttpResponse(HttpResponse *nonnull resp) {
     if (resp->head.type == HEADER_AS_STRUCT) {
         memset(resp->head.data.structure.fields, 0, resp->head.data.structure.count);
         free(resp->head.data.structure.fields);
@@ -22,7 +23,7 @@ void freeResponse(Response *resp) {
     }
 }
 
-void freeString(String *str) {
+void freeString(String *nonnull str) {
     if (str->data) {
         memset(str->data, 0, str->len);
         free(str->data);

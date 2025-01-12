@@ -24,14 +24,14 @@ MAKE_RAW_REQUEST_N_TIMES_USING_SESSION(GET_REQ_HTTPBIN_ROUTE_GET1, "httpbin.org"
                                        GetReq1WithReps, 3, -1, NO_CALLBACK);
 
 MAKE_RAW_REQUEST_TEST(GET_REQ_HTTPBIN_ROUTE_DELAY1, "httpbin.org", 80, GET_REQ_HTTPBIN_ROUTE_DELAY_TARGET1,
-                      GetReqWithDelay1, 4000000, takeFirst271Chars);
+                      GetReqWithDelay1, 7000000, takeFirst271Chars);
 
 MAKE_RAW_REQUEST_N_TIMES_USING_SESSION(GET_REQ_HTTPBIN_ROUTE_DELAY1, "httpbin.org", 80,
-                                       GET_REQ_HTTPBIN_ROUTE_DELAY_TARGET1, GetReqWithDelayWithReps1, 3, 4500000,
+                                       GET_REQ_HTTPBIN_ROUTE_DELAY_TARGET1, GetReqWithDelayWithReps1, 3, 7000000,
                                        takeFirst271Chars);
 
 MAKE_RAW_REQUEST_N_TIMES_USING_SESSION(GET_REQ_HTTPBIN_ROUTE_STREAM1, "httpbin.org", 80,
-                                       GET_REQ_HTTPBIN_ROUTE_STREAM_TARGET1, GetReqStreamResponse1, 2, 300000,
+                                       GET_REQ_HTTPBIN_ROUTE_STREAM_TARGET1, GetReqStreamResponse1, 2, 3000000,
                                        removeAllNonConstInfo);
 
 // some tests that should time out
@@ -52,7 +52,7 @@ BEGIN_RUNNER_SETTINGS()
     print_pre_run_msg = 0;
     run_all_tests = 1;
     n_test_reps = 1;
-    selected_test = "testGetReqStreamResponse1";
+    selected_test = "testGetReqWithDelayWithReps1";
 END_RUNNER_SETTINGS()
 
 BEGIN_TEST_LIST()
